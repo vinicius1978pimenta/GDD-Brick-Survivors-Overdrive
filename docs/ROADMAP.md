@@ -10,8 +10,8 @@ Este documento descreve o plano de desenvolvimento do **Brick Survivors: Overdri
 | :--- | :--- | :---: | :--- |
 | **Fase 1** | Fundação do Monorepo, Infraestrutura e Agentes | **Concluída** | Orquestrador / Time Base |
 | **Fase 2** | Cena 3D Local no Front-End (Three.js & Viewport) | **Concluída** | Especialista Front-End / Engine |
-| **Fase 3** | Movimentação, Física Arcade e Controle de Veículos | **Em Andamento** | Especialista Front-End & Game Architecture |
-| **Fase 4** | Sistema Modular de Blocos e Destruição Estilo Lego | Planejada | Especialista de Game Architecture |
+| **Fase 3** | Movimentação, Física Arcade e Controle de Veículos | **Concluída** | Especialista Front-End & Game Architecture |
+| **Fase 4** | Sistema Modular de Blocos e Destruição Estilo Lego | **Próxima (Pronta para Iniciar)** | Especialista de Game Architecture |
 | **Fase 5** | Netcode Autoritativo (NestJS Socket.IO, Predição & Reconciliação) | Planejada | Especialista Back-End & Netcode |
 | **Fase 6** | Sistema de Combate, Armas Fictícias e Object Pooling | Planejada | Especialista de Game Architecture |
 | **Fase 7** | Modos de Jogo (Sobrevivência Co-op & Combate PvP) | Planejada | Time Integrado |
@@ -34,20 +34,26 @@ Este documento descreve o plano de desenvolvimento do **Brick Survivors: Overdri
 - [x] Instalação de `three` e `@types/three` em `Front-Workspace/`.
 - [x] Criação do `GameViewportComponent` (Dumb Component desacoplado para renderização WebGL com OnPush).
 - [x] Configuração do Renderizador WebGL responsivo com ajuste dinâmico de redimensionamento (`ResizeObserver`).
-- [x] Construção da arena de teste com iluminação (luz ambiente + direcional com sombras), piso com studs procedurais de blocos de montar e muretas coloridas de contenção.
-- [x] Criação do personagem de blocos geométrico provisório (herói montável com cabeça, tronco, membros, visor e mochila).
-- [x] Implementação de câmera em terceira pessoa com rotação suave (lerp/damping), arraste com mouse, zoom e órbita suave.
+- [x] Construção da arena de teste com iluminação, piso com studs procedurais e muretas coloridas de contenção.
+- [x] Criação do personagem de blocos geométrico provisório (herói montável).
+- [x] Implementação de câmera em terceira pessoa com rotação suave e órbita suave.
 - [x] Garantia de 60 FPS estáveis fora da zona Angular e validação através de testes automatizados (`npm run test:frontend` e `npm run build:frontend`).
 - [x] Auditoria de QA aprovada com zero uso de `any` e desalocação exaustiva de memória no `ngOnDestroy`.
 
-### Fase 3: Movimentação, Física Arcade e Controle de Veículos (PRÓXIMA)
-- [ ] Separação estrita de lógica e matemática (motor ECS agnóstico a Three.js).
-- [ ] Implementação do Game Loop determinístico com fixed timestep de 60Hz (`1/60s`) e acumulador de tempo.
-- [ ] Movimentação e rotação responsiva do personagem pedestre.
-- [ ] Física arcade de veículos (carros e motos): aceleração, frenagem, atrito lateral e derrapagem controlada (*drift*).
-- [ ] Sistema de embarque e desembarque em veículos.
+### Fase 3: Movimentação, Física Arcade e Controle de Veículos (CONCLUÍDA)
+- [x] Separação estrita de lógica e matemática: motor ECS em `core/engine/` agnóstico a Three.js.
+- [x] Implementação do `GameLoop` determinístico com fixed timestep de 60Hz (`1/60s`) e acumulador de tempo.
+- [x] `MovementSystem`: locomoção responsiva do pedestre (WASD/setas), rotação suave na direção da marcha e limites na arena.
+- [x] `VehiclePhysicsSystem`: física arcade completa com aceleração linear progressiva, desaceleração por arrasto/atrito, frenagem vigorosa, ré e freio de mão (`Space`) disparando derrapagem lateral (*drift*).
+- [x] `InteractionSystem`: sistema de detecção de proximidade (2.8m) com tecla de interação `E` para embarque/desembarque no veículo.
+- [x] Buggy arcade de blocos 3D adicionado à cena com chassi amarelo/preto, 4 rodas volumosas com calotas e santantônio.
+- [x] Câmera em terceira pessoa adaptativa com transição suave de distância e ângulo polar ao pilotar vs a pé.
+- [x] HUD esportivo com velocímetro digital (km/h), barra de potência, indicador de modo e badge de DRIFT.
+- [x] Suíte de testes automatizados com Vitest: **37 testes aprovados (100% de sucesso)** cobrindo todos os sistemas ECS e componentes.
+- [x] Build de produção (`ng build`) concluído com sucesso (código 0).
+- [x] Auditoria de QA homologada sem ressalvas impeditivas.
 
-### Fase 4: Sistema Modular de Blocos e Destruição Estilo Lego
+### Fase 4: Sistema Modular de Blocos e Destruição Estilo Lego (PRÓXIMA)
 - [ ] Definição da estrutura modular de peças de blocos (chassi, rodas, blindagem, para-choques).
 - [ ] Sistema de pontos de ancoragem (*sockets*) para encaixe de blocos.
 - [ ] Sistema de durabilidade e desprendimento de blocos individuais sob impacto.

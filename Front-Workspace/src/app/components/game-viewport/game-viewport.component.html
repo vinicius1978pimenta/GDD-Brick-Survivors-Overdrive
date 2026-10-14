@@ -1,21 +1,71 @@
 <div #viewportContainer class="viewport-container" tabindex="0" role="region" aria-label="Visualizador da Arena 3D de Blocos">
   <canvas #renderCanvas class="render-canvas"></canvas>
 
-  <div class="hud-overlay" aria-hidden="true">
+  <!-- Top Left: Brand & Status -->
+  <div class="hud-top-left" aria-hidden="true">
     <div class="badge-brand">
       <span class="stud-dot"></span>
       <span>Brick Survivors: Overdrive</span>
     </div>
+
+    <div class="mode-badge" [class.mode-driving]="isDriving()">
+      <span class="mode-icon">{{ isDriving() ? '🏎️' : '🚶' }}</span>
+      <span class="mode-text">{{ isDriving() ? 'PILOTANDO BUGGY' : 'A PÉ (HERÓI)' }}</span>
+    </div>
   </div>
 
+  <!-- Top Right: Speedometer & Drift Alert -->
+  <div class="hud-top-right" aria-hidden="true">
+    <div class="speedometer-card">
+      <div class="speed-value">
+        <span class="speed-number">{{ speedKmh() }}</span>
+        <span class="speed-unit">KM/H</span>
+      </div>
+      <div class="speed-bar-container">
+        <div class="speed-bar-fill" [style.width.%]="speedPercentage()"></div>
+      </div>
+    </div>
+
+    @if (isDrifting()) {
+      <div class="badge-drift">
+        <span class="drift-flame">🔥</span>
+        <span>DRIFT OVERDRIVE!</span>
+      </div>
+    }
+  </div>
+
+  <!-- Center Action Prompt (Interação E) -->
+  <div class="hud-center-action" aria-live="polite">
+    @if (!isDriving() && canInteract()) {
+      <div class="prompt-interact">
+        <kbd class="key-hint">E</kbd>
+        <span class="prompt-label">Dirigir Buggy de Blocos</span>
+      </div>
+    } @else if (isDriving()) {
+      <div class="prompt-dismount">
+        <kbd class="key-hint">E</kbd>
+        <span class="prompt-label">Desembarcar do Veículo</span>
+      </div>
+    }
+  </div>
+
+  <!-- Bottom: Controls Help -->
   <div class="instructions-panel" aria-hidden="true">
     <div class="instruction-item">
-      <kbd>Clique + Arraste</kbd>
-      <span>Inspecionar Câmera</span>
+      <kbd>W A S D</kbd>
+      <span>{{ isDriving() ? 'Acelerar / Marcha Ré / Curva' : 'Movimento do Herói' }}</span>
     </div>
     <div class="instruction-item">
-      <kbd>Scroll</kbd>
-      <span>Zoom</span>
+      <kbd>Espaço</kbd>
+      <span>Freio de Mão & Drift</span>
+    </div>
+    <div class="instruction-item">
+      <kbd>E</kbd>
+      <span>Entrar / Sair</span>
+    </div>
+    <div class="instruction-item">
+      <kbd>Mouse</kbd>
+      <span>Girar Câmera</span>
     </div>
   </div>
 </div>

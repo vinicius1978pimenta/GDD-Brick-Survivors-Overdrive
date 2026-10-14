@@ -26,7 +26,8 @@
   cursor: grabbing;
 }
 
-.hud-overlay {
+/* Top Left HUD */
+.hud-top-left {
   position: absolute;
   top: 1rem;
   left: 1rem;
@@ -62,22 +63,194 @@
   box-shadow: 0 0 8px #e52521;
 }
 
-.instructions-panel {
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 0.25rem 0.7rem;
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  backdrop-filter: blur(6px);
+  transition: all 0.25s ease;
+}
+
+.mode-badge.mode-driving {
+  border-color: rgba(252, 209, 22, 0.8);
+  color: #fcd116;
+  background: rgba(252, 209, 22, 0.12);
+  box-shadow: 0 0 14px rgba(252, 209, 22, 0.25);
+}
+
+/* Top Right HUD (Speedometer & Drift) */
+.hud-top-right {
   position: absolute;
-  bottom: 1rem;
+  top: 1rem;
   right: 1rem;
   z-index: 10;
   pointer-events: none;
-  background: rgba(13, 17, 23, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+
+.speedometer-card {
+  background: rgba(13, 17, 23, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
   padding: 0.5rem 0.85rem;
+  min-width: 120px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.speed-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+
+.speed-number {
+  font-size: 1.75rem;
+  font-weight: 900;
+  font-family: 'Courier New', Courier, monospace;
+  color: #f8fafc;
+  line-height: 1;
+}
+
+.speed-unit {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.05em;
+}
+
+.speed-bar-container {
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  margin-top: 0.35rem;
+  overflow: hidden;
+}
+
+.speed-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8 0%, #fcd116 70%, #ef4444 100%);
+  border-radius: 3px;
+  transition: width 0.08s ease-out;
+}
+
+.badge-drift {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(245, 158, 11, 0.95));
+  color: #ffffff;
+  padding: 0.35rem 0.8rem;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
+  animation: pulse-drift 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-drift {
+  from {
+    transform: scale(1);
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.6);
+  }
+  to {
+    transform: scale(1.06);
+    box-shadow: 0 0 24px rgba(245, 158, 11, 0.95);
+  }
+}
+
+/* Center Action Prompt */
+.hud-center-action {
+  position: absolute;
+  top: 75%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.prompt-interact,
+.prompt-dismount {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid #fcd116;
+  border-radius: 9999px;
+  padding: 0.5rem 1.1rem;
+  box-shadow: 0 0 20px rgba(252, 209, 22, 0.45);
+  color: #f8fafc;
+  font-size: 0.85rem;
+  font-weight: 700;
+  backdrop-filter: blur(10px);
+  animation: prompt-bounce 1.2s ease-in-out infinite;
+}
+
+.prompt-dismount {
+  border-color: #38bdf8;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.45);
+}
+
+@keyframes prompt-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.key-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: #fcd116;
+  color: #0f172a;
+  font-size: 0.85rem;
+  font-weight: 900;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.prompt-dismount .key-hint {
+  background: #38bdf8;
+}
+
+/* Bottom Instructions Panel */
+.instructions-panel {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  pointer-events: none;
+  background: rgba(13, 17, 23, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 0.45rem 0.9rem;
   color: #94a3b8;
-  font-size: 0.75rem;
-  backdrop-filter: blur(6px);
+  font-size: 0.72rem;
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
+  white-space: nowrap;
 }
 
 .instruction-item {
@@ -88,9 +261,11 @@
 
 .instruction-item kbd {
   background: rgba(255, 255, 255, 0.12);
-  color: #e2e8f0;
-  padding: 0.1rem 0.35rem;
+  color: #f8fafc;
+  padding: 0.15rem 0.4rem;
   border-radius: 4px;
   font-family: inherit;
   font-size: 0.7rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }

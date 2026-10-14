@@ -1,7 +1,7 @@
 # Notas do Projeto - Brick Survivors: Overdrive
 
 **Data de Início:** Outubro de 2026  
-**Status Geral:** Fase 1 Concluída | Fase 2 Concluída | Fase 3 Em Andamento  
+**Status Geral:** Fases 1, 2 e 3 Concluídas com Sucesso | Pronto para Fase 4  
 **Orquestrador:** Maestro (Agente Principal)
 
 ---
@@ -12,35 +12,64 @@ A **Fase 1: Fundação do Monorepo, Infraestrutura e Agentes** foi concluída co
 
 ### Entregas Realizadas:
 1. **Infraestrutura e Contêineres:**
-   - Orquestração via Docker Compose com PostgreSQL 16 Alpine exposto na porta externa `5433` (mapeada para `5432` interna) para evitar colisão com instâncias locais.
+   - Orquestração via Docker Compose com PostgreSQL 16 Alpine exposto na porta externa `5433` (mapeada para `5432` interna).
    - Volumes persistentes nomeados (`brick_survivors_postgres_data`) e healthchecks configurados.
-   - Variáveis de ambiente configuráveis e fallback seguro.
-
 2. **Back-End (NestJS 12):**
    - Configurado em `back-workspace/` com TypeORM e driver `pg`.
-   - Estrutura desacoplada em módulos, controllers, services e DTOs.
-   - Padrão estrito de Migrations TypeORM com prefixo de timestamp em milissegundos (`Date.now()`, 13 dígitos) para ordenação determinística.
-   - Suíte de testes automatizados com **Vitest** (Unitários e E2E via Supertest).
-   - Linter com oxlint configurado para type-checking ágil.
-
+   - Migrations TypeORM com prefixo em milissegundos (`Date.now()`, 13 dígitos).
+   - Testes unitários com Vitest e linter com oxlint.
 3. **Front-End (Angular 22):**
-   - Configurado em `Front-Workspace/` com arquitetura baseada em Standalone Components.
-   - Roteamento nativo e CSS vanilla estilizado sem bibliotecas pesadas de terceiros.
-   - Configurado com **Vitest** e jsdom para testes unitários rápidos.
-   - Preparado para integração do canvas WebGL Three.js.
-
+   - Configurado em `Front-Workspace/` com Standalone Components, Vitest e jsdom.
 4. **Diretrizes e Skills de Agentes:**
-   - 5 Skills ativas e documentadas em `.agents/skills/`:
-     - `clean-code`: Princípios SOLID, DRY, KISS, YAGNI e checklist de qualidade.
-     - `backend-architecture`: Arquitetura em camadas NestJS, validação com DTOs.
-     - `frontend-architecture`: Separação Smart/Dumb components, a11y, estado unidirecional.
-     - `qa-testing`: Pirâmide de testes com Vitest, mocks e padrões AAA.
-     - `game-architecture`: ECS (Entity Component System), game loop autoritativo em fixed timestep (60Hz), predição de cliente, reconciliação de servidor, spatial partitioning e object pooling.
-   - Regras globais consolidadas em `AGENTS.md`.
+   - 5 Skills ativas em `.agents/skills/` (`clean-code`, `backend-architecture`, `frontend-architecture`, `qa-testing`, `game-architecture`).
 
 ---
 
-## 2. Estrutura Atual de Pastas
+## 2. Visão Geral da Fase 2 (Concluída)
+
+A **Fase 2: Cena 3D Local no Front-End (Three.js & Viewport)** foi totalmente entregue e auditada:
+- Instalação de `three` e `@types/three` no `Front-Workspace/`.
+- Criação do Dumb Component `GameViewportComponent` com WebGLRenderer responsivo via `ResizeObserver`.
+- Arena estilo blocos de montar com textura procedural de studs, grid e iluminação com sombras projetadas.
+- Herói provisório em blocos estilizados e câmera orbital em terceira pessoa.
+- Suíte de 8 testes passando no Vitest e compilação de produção com código 0.
+
+---
+
+## 3. Visão Geral da Fase 3 (Concluída com Sucesso)
+
+A **Fase 3: Movimentação, Física Arcade e Controle de Veículos** foi entregue pelo Especialista de Front-End e homologada com louvor pelo Especialista de QA:
+
+### Entregas Realizadas:
+1. **Motor ECS Isomórfico e Desacoplado de Three.js (`Front-Workspace/src/app/core/engine/`):**
+   - **`types.ts`**: Componentes puros (`TransformComponent`, `VelocityComponent`, `InputState`, `VehicleComponent`, `CharacterControllerComponent`).
+   - **`game-loop.ts`**: GameLoop determinístico com Fixed Timestep em 60Hz (`fixedDeltaTime = 1 / 60` ≈ 16.66ms), acumulador de tempo, proteção contra espiral de morte (`frameTime <= 0.25s`) e cálculo de `interpolationAlpha`.
+   - **`movement.system.ts`**: Movimentação fluida do pedestre em 8 direções com aceleração/desaceleração gradual, rotação suave na direção da marcha e colisão elástica com as muretas da arena.
+   - **`vehicle.system.ts`**: Física veicular arcade com tração linear, aceleração progressiva, desaceleração por atrito/arrasto, frenagem vigorosa, marcha ré com velocidade controlada e freio de mão (`Space`) ativando estado de *drift* lateral com deslizamento controlado e ganho de rotação angular.
+   - **`interaction.system.ts`**: Sistema de detecção de proximidade (raio de 2.8m). Tecla `E` realiza o embarque no buggy (o herói é ancorado no banco do condutor e os comandos guiam o veículo) ou desembarque lateral do pedestre.
+   - **`game-world.ts`**: Orquestrador ECS que integra entidades, componentes, sistemas e temporalidade.
+
+2. **Apresentação e Viewport 3D (`GameViewportComponent`):**
+   - **Buggy Arcade de Blocos 3D**: Chassi volumoso em amarelo automotivo e preto fosco, 4 rodas grandes em cilindros com calotas coloridas, santantônio reforçado em barras tubulares, assento de corrida e faróis com reflexo especular.
+   - **Câmera em Terceira Pessoa Dinâmica**: Acompanha o pedestre suavemente a ~7.5m e transiciona dinamicamente para ~10.5m com ângulo polar adaptado e ampliação do campo de visão ao pilotar o veículo.
+   - **HUD Arcade Reativo**: Sinais públicos (`isDriving`, `speedKmh`, `speedPercentage`, `isDrifting`, `canInteract`), velocímetro esportivo digital com barra de progresso, badge de modo ("MODO: A PÉ" vs "PILOTANDO BUGGY") e banner de DRIFT ativado em tempo real.
+   - **Controles de Teclado**: WASD / Setas para movimentação/direção, Espaço para Drift / Freio de mão e E para interação.
+
+3. **Auditoria de Qualidade e Testes Automatizados (QA):**
+   - **Suíte de Testes:** **37 testes unitários aprovados (100% de sucesso em 7 suítes com Vitest)**:
+     - `vehicle.system.spec.ts` (7 testes): aceleração, freio, marcha ré, drift com freio de mão, desaceleração por arrasto e colisão com bordas da arena.
+     - `movement.system.spec.ts` (6 testes): locomoção WASD, rotação suave e confinamento na arena.
+     - `interaction.system.spec.ts` (4 testes): embarque, desembarque, validação de distância e bloqueio sem proximidade.
+     - `game-world.spec.ts` (5 testes): integração do mundo ECS e atualização síncrona.
+     - `game-loop.spec.ts` (5 testes): fixed timestep de 60Hz e acumulador.
+     - `game-viewport.component.spec.ts` (7 testes): rendering, HUD reativo, prompt de proximidade e ciclo de vida.
+     - `app.spec.ts` (3 testes): estrutura e montagem da aplicação.
+   - **Build de Produção:** `ng build` concluído com sucesso e código de saída 0.
+   - **Conformidade Clean Code:** Zero uso de `any`, estrita separação entre simulação matemática e renderizador Three.js, e descarte total de recursos no `ngOnDestroy`.
+
+---
+
+## 4. Estrutura Atual de Pastas
 
 ```text
 GDD-Brick-Survivors-Overdrive/
@@ -52,19 +81,20 @@ GDD-Brick-Survivors-Overdrive/
 │       ├── game-architecture/
 │       └── qa-testing/
 ├── back-workspace/               # Aplicação NestJS + TypeORM + Vitest
-│   ├── src/
-│   │   ├── database/             # Data Source e Migrations (prefixo ms)
-│   │   ├── modules/
-│   │   ├── app.module.ts
-│   │   └── main.ts
-│   ├── test/
-│   ├── Dockerfile
-│   └── package.json
 ├── Front-Workspace/              # Aplicação Angular 22 Standalone + Three.js + Vitest
 │   ├── src/
 │   │   ├── app/
+│   │   │   ├── core/
+│   │   │   │   └── engine/       # Motor ECS Puro (Isomórfico & Desacoplado de Three.js)
+│   │   │   │       ├── types.ts
+│   │   │   │       ├── game-loop.ts
+│   │   │   │       ├── game-world.ts
+│   │   │   │       ├── movement.system.ts
+│   │   │   │       ├── vehicle.system.ts
+│   │   │   │       ├── interaction.system.ts
+│   │   │   │       └── test/     # Suíte de testes unitários da Engine ECS
 │   │   │   ├── components/
-│   │   │   │   └── game-viewport/ # GameViewportComponent (WebGL Canvas, Three.js)
+│   │   │   │   └── game-viewport/# Viewport 3D Three.js + HUD Arcade + Inputs
 │   │   │   ├── app.component.html
 │   │   │   ├── app.component.ts
 │   │   │   └── app.component.spec.ts
@@ -75,57 +105,25 @@ GDD-Brick-Survivors-Overdrive/
 │   ├── ROADMAP.md
 │   ├── architecture.md
 │   └── DECISOES-TECNICAS.md
-├── docker-compose.yml            # Orquestração do PostgreSQL (5433) e API
-├── AGENTS.md                     # Diretrizes mandatórias para agentes de IA
-└── package.json                  # Scripts unificados na raiz do monorepo
+├── docker-compose.yml
+├── AGENTS.md
+└── package.json
 ```
 
 ---
 
-## 3. Registro de Entregas da Fase 2 (Concluída com Sucesso)
+## 5. Comandos para Execução e Testes Locais
 
-A **Fase 2: Cena 3D Local no Front-End (Three.js & Viewport)** foi totalmente concluída e auditada:
-
-1. **Instalação do Three.js:**
-   - Adicionadas as dependências `three` (`^0.186.1`) e `@types/three` (`^0.186.0`) no `Front-Workspace/package.json`.
-2. **Criação do `GameViewportComponent`:**
-   - Implementado como **Dumb Component** isolado com `ChangeDetectionStrategy.OnPush` em `src/app/components/game-viewport/`.
-   - Renderizador `THREE.WebGLRenderer` responsivo acoplado a `ResizeObserver`, adaptando aspect ratio e dimensões sem distorção.
-   - Iluminação: `THREE.AmbientLight` (luz difusa suave), `THREE.HemisphereLight` e `THREE.DirectionalLight` com mapa de sombras PCF suave (`castShadow = true`).
-   - Arena estilo brinquedo de montar: piso com textura procedural de pinos (LEGO-style studs) via `THREE.CanvasTexture`, grid tático sobreposto e muretas de contenção em blocos amarelos e vermelhos.
-   - Herói geométrico provisório: montado com geometrias puras de blocos (pernas articuladas azuis, quadril cinza, tronco vermelho, cabeça amarela cilíndrica com stud superior, visor ciano emissivo e mochila survivor traseira com núcleo de energia).
-   - Câmera orbital em terceira pessoa: coordenadas esféricas com interpolação suave (Damping/Lerp), sensível a arraste de ponteiro (mouse drag) para rotação horizontal e vertical, zoom via scroll do mouse e rotação automática sutil quando ocioso.
-   - Game Loop estável a 60 FPS: executado fora da zona do Angular (`NgZone.runOutsideAngular`), eliminando ciclos desnecessários de Change Detection.
-   - Gestão de Memória e Ciclo de Vida: método `cleanup()` no `ngOnDestroy` descartando texturas, geometrias, materiais (via travessia da cena), cancelando `requestAnimationFrame`, desconectando `ResizeObserver` e removendo listeners.
-3. **Auditoria e Qualidade (QA):**
-   - Suíte de testes unitários: 8 testes aprovados (100% de sucesso via Vitest).
-   - Build de produção: `npm run build:frontend` compilado com sucesso (`dist/Front-Workspace`).
-   - Conformidade: Zero uso de `any`, estrita tipagem TypeScript, código alinhado a `AGENTS.md` e `.agents/skills/clean-code/SKILL.md`.
-
----
-
-## 4. Comandos para Execução e Testes Locais
-
-A partir da raiz do monorepo (`GDD-Brick-Survivors-Overdrive/`):
-
-### Banco de Dados (Docker):
 ```bash
-npm run docker:up:db     # Subir PostgreSQL na porta 5433
-npm run docker:up        # Subir Postgres + Backend
-npm run docker:down      # Parar contêineres
-npm run docker:logs      # Visualizar logs
-```
+# Executar suíte completa de testes no monorepo
+npm run test:backend     # 1 teste passando no NestJS
+npm run test:frontend    # 37 testes passando no Angular/Vitest
 
-### Desenvolvimento Local:
-```bash
-npm run start:backend    # Iniciar API NestJS (watch mode)
-npm run start:frontend   # Iniciar Front-End Angular (porta 4200)
-```
+# Compilações de produção
+npm run build:backend    # NestJS build
+npm run build:frontend   # Angular build
 
-### Testes e Verificação de Qualidade:
-```bash
-npm run test:backend     # Testes unitários do backend
-npm run test:frontend    # Testes unitários do frontend (8 testes passando)
-npm run build:backend    # Compilação de produção NestJS
-npm run build:frontend   # Compilação de produção Angular
+# Servidores de desenvolvimento
+npm run start:backend    # NestJS watch mode
+npm run start:frontend   # Angular dev server (porta 4200)
 ```

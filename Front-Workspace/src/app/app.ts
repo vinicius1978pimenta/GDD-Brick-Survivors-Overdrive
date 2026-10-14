@@ -12,5 +12,5 @@ import { GameViewportComponent } from './components/game-viewport';
 })
 export class App {
   protected readonly title = signal('Brick Survivors: Overdrive');
-  protected readonly phase = signal('FASE 2: Renderização 3D & Viewport Three.js');
+  protected readonly phase = signal('FASE 3: Movimentação, Física Arcade & Controle de Veículos');
 }
