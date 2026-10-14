@@ -43,14 +43,39 @@ describe('MovementSystem', () => {
     expect(transform.z).toBeGreaterThan(0); // Movimentou-se para a frente (+Z)
   });
 
-  it('deve rotacionar suavemente o herói em direção ao vetor de entrada', () => {
-    input.right = true; // Direção para +X
-    const initialRot = transform.rotationY;
+  it('deve recuar de ré (-Z) mantendo orientação frontal com input backward', () => {
+    input.backward = true;
+    updateMovementSystem(transform, velocity, controller, input, false, 0.1);
+
+    expect(controller.speed).toBeLessThan(0);
+    expect(controller.isMoving).toBe(true);
+    expect(transform.z).toBeLessThan(0); // Recuou para trás (-Z)
+  });
+
+  it('deve rotacionar para a esquerda (A) e direita (D) estilo condução', () => {
+    // Rotação para a esquerda (A)
+    input.left = true;
+    updateMovementSystem(transform, velocity, controller, input, false, 0.1);
+    expect(transform.rotationY).toBeGreaterThan(0);
+
+    // Rotação para a direita (D)
+    input.left = false;
+    input.right = true;
+    transform.rotationY = 0;
+    updateMovementSystem(transform, velocity, controller, input, false, 0.1);
+    expect(transform.rotationY).toBeLessThan(0);
+  });
+
+  it('deve permitir girar o corpo no próprio eixo mesmo estando parado', () => {
+    controller.speed = 0;
+    input.left = true;
 
     updateMovementSystem(transform, velocity, controller, input, false, 0.1);
 
-    expect(transform.rotationY).not.toBe(initialRot);
-    expect(controller.moveAngle).toBeCloseTo(Math.PI / 2, 2);
+    expect(transform.rotationY).toBeGreaterThan(0);
+    expect(controller.isMoving).toBe(true);
+    expect(transform.x).toBe(0);
+    expect(transform.z).toBe(0);
   });
 
   it('deve desacelerar o personagem gradualmente quando o input for liberado', () => {
@@ -77,7 +102,7 @@ describe('MovementSystem', () => {
   it('deve restringir rigorosamente as coordenadas dentro dos limites da arena (-19 a 19)', () => {
     transform.x = 25.0; // Posição fora da arena
     transform.z = -30.0;
-    input.right = true;
+    input.forward = true;
 
     updateMovementSystem(transform, velocity, controller, input, false, 0.1, DEFAULT_ARENA_BOUNDS);
 

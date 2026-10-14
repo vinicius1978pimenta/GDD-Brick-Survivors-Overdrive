@@ -38,8 +38,10 @@ export class GameWorld {
   public readonly heroController: CharacterControllerComponent = {
     speed: 0,
     maxSpeed: 8.5,
+    reverseMaxSpeed: -4.8,
     acceleration: 24.0,
     deceleration: 28.0,
+    turnSpeed: 3.8,
     isMoving: false,
     moveAngle: 0,
   };
@@ -156,7 +158,7 @@ export class GameWorld {
   public getSpeedKmh(): number {
     const rawSpeed = this.isDriving()
       ? Math.abs(this.vehicleComponent.currentSpeed)
-      : this.heroController.speed;
+      : Math.abs(this.heroController.speed);
     // Conversão de unidades do mundo (1 bloco = 1 metro) para km/h: 1 m/s = 3.6 km/h
     return Math.round(rawSpeed * 3.6);
   }

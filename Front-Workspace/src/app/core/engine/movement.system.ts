@@ -22,7 +22,11 @@ export function normalizeAngleDifference(target: number, current: number): numbe
 
 /**
  * Sistema de Movimentação do Personagem Pedestre.
- * Acelera suavemente na direção do input, rotaciona para a direção da marcha e aplica limites da arena.
+ * Controle arcade alinhado à orientação da câmera e veículo:
+ * - W: avança na direção em que o personagem está olhando
+ * - S: recua / marcha ré mantendo o enquadramento
+ * - A: gira o corpo para a esquerda
+ * - D: gira o corpo para a direita
  */
 export function updateMovementSystem(
   transform: TransformComponent,
@@ -43,58 +47,62 @@ export function updateMovementSystem(
     return;
   }
 
-  let inputX = 0;
-  let inputZ = 0;
+  // 1. Rotação / Esterçamento Angular do Personagem (A/D)
+  const turnSpeed = controller.turnSpeed ?? 3.8;
+  let steerInput = 0;
+  if (input.left) steerInput += 1;
+  if (input.right) steerInput -= 1;
 
-  if (input.left) inputX -= 1;
-  if (input.right) inputX += 1;
-  if (input.forward) inputZ += 1;
-  if (input.backward) inputZ -= 1;
-
-  const hasInput = inputX !== 0 || inputZ !== 0;
-
-  if (hasInput) {
-    // Normalização do vetor de entrada
-    const length = Math.hypot(inputX, inputZ);
-    const normX = inputX / length;
-    const normZ = inputZ / length;
-
-    // Aceleração progressiva até a velocidade máxima
-    controller.speed = Math.min(
-      controller.maxSpeed,
-      controller.speed + controller.acceleration * dt,
-    );
-    controller.isMoving = true;
-
-    // Ângulo desejado em relação ao plano XZ (0 rad = olhando para +Z, PI/2 = +X, etc.)
-    const targetAngle = Math.atan2(normX, normZ);
-    controller.moveAngle = targetAngle;
-
-    // Rotação suave do personagem em direção à marcha
-    const angleDiff = normalizeAngleDifference(targetAngle, transform.rotationY);
-    const turnRate = 14 * dt;
-    if (Math.abs(angleDiff) <= turnRate) {
-      transform.rotationY = targetAngle;
-    } else {
-      transform.rotationY += Math.sign(angleDiff) * turnRate;
-    }
-
-    velocity.vx = Math.sin(transform.rotationY) * controller.speed;
-    velocity.vz = Math.cos(transform.rotationY) * controller.speed;
-  } else {
-    // Desaceleração suave por atrito quando sem entrada
-    controller.speed = Math.max(0, controller.speed - controller.deceleration * dt);
-    controller.isMoving = controller.speed > 0.05;
-
-    velocity.vx = Math.sin(transform.rotationY) * controller.speed;
-    velocity.vz = Math.cos(transform.rotationY) * controller.speed;
+  if (steerInput !== 0) {
+    transform.rotationY += steerInput * turnSpeed * dt;
   }
 
-  // Atualização da posição física
+  // 2. Aceleração / Frenagem / Recuo (W/S)
+  const reverseMax = Math.abs(controller.reverseMaxSpeed ?? (controller.maxSpeed * 0.55));
+
+  if (input.forward) {
+    if (controller.speed < -0.5) {
+      // Freia o recuo
+      controller.speed += controller.deceleration * dt;
+    } else {
+      // Acelera para frente na direção frontal
+      controller.speed = Math.min(
+        controller.maxSpeed,
+        controller.speed + controller.acceleration * dt,
+      );
+    }
+  } else if (input.backward) {
+    if (controller.speed > 0.5) {
+      // Freia a marcha à frente
+      controller.speed = Math.max(0, controller.speed - controller.deceleration * dt);
+    } else {
+      // Recua suavemente de ré
+      controller.speed = Math.max(
+        -reverseMax,
+        controller.speed - controller.acceleration * 0.75 * dt,
+      );
+    }
+  } else {
+    // Desaceleração passiva por atrito
+    if (controller.speed > 0) {
+      controller.speed = Math.max(0, controller.speed - controller.deceleration * dt);
+    } else if (controller.speed < 0) {
+      controller.speed = Math.min(0, controller.speed + controller.deceleration * dt);
+    }
+  }
+
+  controller.isMoving = Math.abs(controller.speed) > 0.05 || steerInput !== 0;
+  controller.moveAngle = transform.rotationY;
+
+  // 3. Vetor de velocidade baseado no ângulo atual
+  velocity.vx = Math.sin(transform.rotationY) * controller.speed;
+  velocity.vz = Math.cos(transform.rotationY) * controller.speed;
+
+  // 4. Atualização da posição física
   transform.x += velocity.vx * dt;
   transform.z += velocity.vz * dt;
 
-  // Restrição aos limites da arena
+  // 5. Restrição aos limites da arena
   if (transform.x < bounds.minX) {
     transform.x = bounds.minX;
     velocity.vx = 0;

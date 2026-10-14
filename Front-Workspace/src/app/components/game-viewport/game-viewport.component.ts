@@ -54,8 +54,8 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   private isDestroyed = false;
 
   // Parâmetros orbitais da câmera adaptativa
-  private targetTheta = 0;
-  private currentTheta = 0;
+  private targetTheta = Math.PI;
+  private currentTheta = Math.PI;
   private targetPhi = Math.PI / 3.4;
   private currentPhi = Math.PI / 3.4;
   private targetRadius = 7.5;
@@ -153,6 +153,11 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.scene.fog = new THREE.FogExp2(0x101622, 0.022);
 
     this.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
+    this.targetTheta = this.world.heroTransform.rotationY + Math.PI;
+    this.currentTheta = this.targetTheta;
+    this.lookAtX = this.world.heroTransform.x;
+    this.lookAtY = 1.35;
+    this.lookAtZ = this.world.heroTransform.z;
     this.updateCameraPosition();
 
     this.setupLighting();
@@ -854,16 +859,15 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     if (!this.isDragging) {
       this.idleTime += delta;
 
-      if (isDriving) {
-        // Em modo de pilotagem, alinha suavemente a câmera com a traseira do veículo
-        const behindVehicleTheta = vehicle.rotationY + Math.PI;
-        let thetaDiff = (behindVehicleTheta - this.targetTheta) % (Math.PI * 2);
-        if (thetaDiff > Math.PI) thetaDiff -= Math.PI * 2;
-        if (thetaDiff < -Math.PI) thetaDiff += Math.PI * 2;
-        this.targetTheta += thetaDiff * Math.min(1, delta * 3.5);
-      } else if (!this.userManualCameraRotation && this.idleTime > 2.5) {
-        this.targetTheta += delta * 0.18;
-      }
+      // Alinha suavemente a câmera com a traseira do veículo ou costas do herói
+      const activeRotation = isDriving ? vehicle.rotationY : hero.rotationY;
+      const behindEntityTheta = activeRotation + Math.PI;
+      let thetaDiff = (behindEntityTheta - this.targetTheta) % (Math.PI * 2);
+      if (thetaDiff > Math.PI) thetaDiff -= Math.PI * 2;
+      if (thetaDiff < -Math.PI) thetaDiff += Math.PI * 2;
+
+      const alignSpeed = isDriving ? 3.8 : 4.8;
+      this.targetTheta += thetaDiff * Math.min(1, delta * alignSpeed);
     }
 
     this.currentTheta += (this.targetTheta - this.currentTheta) * lerpFactor;

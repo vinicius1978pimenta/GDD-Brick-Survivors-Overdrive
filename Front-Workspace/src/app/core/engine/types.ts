@@ -43,8 +43,10 @@ export interface VehicleComponent {
 export interface CharacterControllerComponent {
   speed: number;
   maxSpeed: number;
+  reverseMaxSpeed?: number;
   acceleration: number;
   deceleration: number;
+  turnSpeed?: number;
   isMoving: boolean;
   moveAngle: number;
 }
