@@ -1,0 +1,96 @@
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(circle at center, #1e2430 0%, #0d1117 100%);
+  user-select: none;
+}
+
+.viewport-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  outline: none;
+}
+
+.render-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+.render-canvas:active {
+  cursor: grabbing;
+}
+
+.hud-overlay {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.badge-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(13, 17, 23, 0.85);
+  border: 1px solid rgba(255, 209, 22, 0.4);
+  color: #fcd116;
+  padding: 0.35rem 0.8rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.stud-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #e52521;
+  box-shadow: 0 0 8px #e52521;
+}
+
+.instructions-panel {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 10;
+  pointer-events: none;
+  background: rgba(13, 17, 23, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.5rem 0.85rem;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.instruction-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.instruction-item kbd {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.7rem;
+}

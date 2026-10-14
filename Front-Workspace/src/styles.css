@@ -1,1 +1,28 @@
-/* You can add global styles to this file, and also import other style files */
+/* Estilos Globais - Brick Survivors: Overdrive */
+:root {
+  --color-bg-dark: #090d16;
+  --color-surface: #131b2a;
+  --color-primary-yellow: #fcd116;
+  --color-primary-red: #e52521;
+  --color-primary-blue: #0055b8;
+  --color-neon-cyan: #00f2fe;
+  --color-text-main: #f8fafc;
+  --color-text-muted: #94a3b8;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--color-bg-dark);
+  color: var(--color-text-main);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
