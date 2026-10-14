@@ -26,6 +26,7 @@ import {
   dismantleVehicle,
   updateDebrisSimulation,
 } from './modular-block.system';
+import { PendingInput, WorldStateSnapshot } from '../network/network.types';
 
 /**
  * GameWorld coordena a simulação ECS isomórfica e pura de Brick Survivors: Overdrive.
@@ -320,5 +321,94 @@ export class GameWorld {
 
   public triggerInteract(): void {
     this.inputState.interact = true;
+  }
+
+  // --- CLIENT-SIDE PREDICTION & SERVER RECONCILIATION ---
+  public readonly pendingInputs: PendingInput[] = [];
+
+  /**
+   * Enfileira um input enviado ao servidor com a posição prevista localmente.
+   */
+  public enqueuePendingInput(seq: number, input: InputState, dt: number): void {
+    this.pendingInputs.push({
+      seq,
+      input: { ...input },
+      dt,
+      predictedPosition: {
+        x: this.heroTransform.x,
+        y: this.heroTransform.y,
+        z: this.heroTransform.z,
+      },
+    });
+
+    // Limita o buffer para evitar crescimento descontrolado
+    if (this.pendingInputs.length > 120) {
+      this.pendingInputs.shift();
+    }
+  }
+
+  /**
+   * Executa a reconciliação autoritativa baseada no snapshot do servidor.
+   * Se a divergência exceder o limiar (ex: 0.25m), ajusta e reaplica os inputs pendentes.
+   */
+  public reconcileServerSnapshot(
+    snapshot: WorldStateSnapshot,
+    localPlayerId: string,
+    divergenceThreshold = 0.25,
+  ): { reconciled: boolean; divergence: number } {
+    const serverPlayer = snapshot.players.find((p) => p.id === localPlayerId);
+    if (!serverPlayer) {
+      return { reconciled: false, divergence: 0 };
+    }
+
+    const lastAckSeq = snapshot.ackInputs[localPlayerId] ?? 0;
+    // Descarta inputs que o servidor já processou e confirmou
+    this.pendingInputs.splice(
+      0,
+      this.pendingInputs.findIndex((item) => item.seq > lastAckSeq) === -1 && this.pendingInputs.length > 0 && this.pendingInputs[this.pendingInputs.length - 1].seq <= lastAckSeq
+        ? this.pendingInputs.length
+        : Math.max(0, this.pendingInputs.findIndex((item) => item.seq > lastAckSeq)),
+    );
+
+    // Mede a discrepância entre a posição local e a do servidor
+    const dx = this.heroTransform.x - serverPlayer.x;
+    const dz = this.heroTransform.z - serverPlayer.z;
+    const divergence = Math.hypot(dx, dz);
+
+    if (divergence > divergenceThreshold) {
+      // Ajusta posição e orientação para o estado autoritativo
+      this.heroTransform.x = serverPlayer.x;
+      this.heroTransform.y = serverPlayer.y;
+      this.heroTransform.z = serverPlayer.z;
+      this.heroTransform.rotationY = serverPlayer.rotationY;
+
+      // Replay dos inputs locais pendentes (re-simulação determinística)
+      for (const pending of this.pendingInputs) {
+        updateMovementSystem(
+          this.heroTransform,
+          this.heroVelocity,
+          this.heroController,
+          pending.input,
+          this.isDriving(),
+          pending.dt,
+          this.bounds,
+        );
+        pending.predictedPosition.x = this.heroTransform.x;
+        pending.predictedPosition.y = this.heroTransform.y;
+        pending.predictedPosition.z = this.heroTransform.z;
+      }
+
+      return { reconciled: true, divergence };
+    }
+
+    return { reconciled: false, divergence };
+  }
+
+  public getPendingInputsCount(): number {
+    return this.pendingInputs.length;
+  }
+
+  public clearPendingInputs(): void {
+    this.pendingInputs.length = 0;
   }
 }

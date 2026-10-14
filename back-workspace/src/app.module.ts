@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { dataSourceOptions } from './database/data-source.js';
+import { GameModule } from './modules/game/game.module.js';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { dataSourceOptions } from './database/data-source.js';
       ...dataSourceOptions,
       autoLoadEntities: true,
     }),
+    GameModule,
   ],
   controllers: [AppController],
   providers: [AppService],
