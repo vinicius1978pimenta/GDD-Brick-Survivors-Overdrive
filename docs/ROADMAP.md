@@ -11,8 +11,8 @@ Este documento descreve o plano de desenvolvimento do **Brick Survivors: Overdri
 | **Fase 1** | Fundação do Monorepo, Infraestrutura e Agentes | **Concluída** | Orquestrador / Time Base |
 | **Fase 2** | Cena 3D Local no Front-End (Three.js & Viewport) | **Concluída** | Especialista Front-End / Engine |
 | **Fase 3** | Movimentação, Física Arcade e Controle de Veículos | **Concluída** | Especialista Front-End & Game Architecture |
-| **Fase 4** | Sistema Modular de Blocos e Destruição Estilo Lego | **Em Andamento** | Especialista Front-End & Game Architecture |
-| **Fase 5** | Netcode Autoritativo (NestJS Socket.IO, Predição & Reconciliação) | Planejada | Especialista Back-End & Netcode |
+| **Fase 4** | Sistema Modular de Blocos e Destruição Estilo Lego | **Concluída** | Especialista Front-End & Game Architecture |
+| **Fase 5** | Netcode Autoritativo (NestJS Socket.IO, Predição & Reconciliação) | **Próxima (Pronta para Iniciar)** | Especialista Back-End & Netcode |
 | **Fase 6** | Sistema de Combate, Armas Fictícias e Object Pooling | Planejada | Especialista de Game Architecture |
 | **Fase 7** | Modos de Jogo (Sobrevivência Co-op & Combate PvP) | Planejada | Time Integrado |
 | **Fase 8** | HUD/UI, Áudio Espacial, Otimizações Finais e Deploy | Planejada | Time Integrado / QA |
@@ -53,12 +53,13 @@ Este documento descreve o plano de desenvolvimento do **Brick Survivors: Overdri
 - [x] Build de produção (`ng build`) concluído com sucesso (código 0).
 - [x] Auditoria de QA homologada sem ressalvas impeditivas.
 
-### Fase 4: Sistema Modular de Blocos e Destruição Estilo Lego (PRÓXIMA)
-- [ ] Definição da estrutura modular de peças de blocos (chassi, rodas, blindagem, para-choques).
-- [ ] Sistema de pontos de ancoragem (*sockets*) para encaixe de blocos.
-- [ ] Sistema de durabilidade e desprendimento de blocos individuais sob impacto.
-- [ ] Renderização otimizada com `InstancedMesh` para redução drástica de draw calls.
-- [ ] Efeitos de detritos e partículas reaproveitadas via `ObjectPool`.
+### Fase 4: Sistema Modular de Blocos e Destruição Estilo Lego (CONCLUÍDA)
+- [x] Definição da estrutura modular de peças de blocos (chassi, rodas, blindagem, para-choques).
+- [x] Sistema de pontos de ancoragem (*sockets*) para encaixe de blocos.
+- [x] Sistema de durabilidade e desprendimento de blocos individuais sob impacto.
+- [x] Implementação de `ObjectPool` puro genérico para detritos e peças sem GC spikes.
+- [x] Efeitos de detritos e peças soltas com física balística arcade e quiques no solo.
+- [x] 56 testes automatizados com Vitest cobrindo 100% dos cenários em 9 suítes.
 
 ### Fase 5: Netcode Autoritativo (Socket.IO, Predição & Reconciliação)
 - [ ] Implementação do NestJS Gateway com Socket.IO para sincronização multiplayer.

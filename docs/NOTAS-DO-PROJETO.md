@@ -1,7 +1,7 @@
 # Notas do Projeto - Brick Survivors: Overdrive
 
 **Data de Início:** Outubro de 2026  
-**Status Geral:** Fases 1, 2 e 3 Concluídas com Sucesso | Pronto para Fase 4  
+**Status Geral:** Fases 1, 2, 3 e 4 Concluídas com Sucesso | Pronto para Fase 5  
 **Orquestrador:** Maestro (Agente Principal)
 
 ---
@@ -73,7 +73,43 @@ A **Fase 3: Movimentação, Física Arcade e Controle de Veículos** foi entregu
 
 ---
 
-## 4. Estrutura Atual de Pastas
+## 4. Visão Geral da Fase 4 (Concluída com Sucesso)
+
+A **Fase 4: Sistema Modular de Blocos e Destruição Estilo Lego** foi concluída pelo Especialista de Front-End & Game Architecture e homologada pelo Especialista de QA:
+
+### Entregas Realizadas:
+1. **Camada ECS Isomórfica e Pura (`Front-Workspace/src/app/core/engine/`):**
+   - **`object-pool.ts`**: Implementação genérica pura de `ObjectPool<T>` com alocação prévia, aquisição (`acquire`) e liberação (`release`) com função de reset, garantindo zero alocação dinâmica contínua e sem picos de Garbage Collection (GC spikes).
+   - **`modular-block.types.ts`**: Estruturas de dados de blocos modulares (`ModularBlock`), veículo modular (`ModularVehicleComponent` com cálculo de durabilidade %) e partículas de detritos (`DebrisParticle`).
+   - **`modular-block.system.ts`**:
+     - Montagem dos 7 blocos estruturais do Buggy (para-choque dianteiro, painéis laterais de blindagem, aerofólio traseiro, santantônio).
+     - Aplicação de dano individual por bloco e cálculo dinâmico da integridade da lataria (0 a 100%).
+     - Desprendimento balístico sob impacto com conversão em detrito solto, rotação angular e física de quique amortecido no solo de studs.
+   - **`game-world.ts`**: Integração do veículo modular e pool de detritos no fixed update (60Hz), com detecção de impactos de alta velocidade contra as muretas da arena e método `forceDetachNextBlock()` para testes.
+
+2. **Apresentação e Viewport 3D (`GameViewportComponent`):**
+   - Mapeamento e renderização dos blocos modulares no Buggy.
+   - Ocultação imediata dos blocos desprendidos na lataria e ativação das malhas de detritos voando e quicando na arena.
+   - Tecla de teste `KeyK` para forçar o desprendimento progressivo de blocos para demonstração em tempo real.
+   - Card esportivo de BLINDAGEM no HUD exibindo a porcentagem restante de blocos intactos.
+
+3. **Auditoria de Qualidade e Testes Automatizados (QA):**
+   - **Suíte de Testes:** **56 testes unitários aprovados (100% de sucesso em 9 suítes com Vitest)**:
+     - `modular-block.system.spec.ts` (5 testes): montagem do buggy, dano, desprendimento e integridade percentual.
+     - `object-pool.spec.ts` (6 testes): pré-alocação, acquire, release, reset e reuso de instâncias.
+     - `vehicle.system.spec.ts` (7 testes)
+     - `movement.system.spec.ts` (12 testes)
+     - `interaction.system.spec.ts` (4 testes)
+     - `game-world.spec.ts` (7 testes)
+     - `game-loop.spec.ts` (5 testes)
+     - `game-viewport.component.spec.ts` (7 testes)
+     - `app.spec.ts` (3 testes)
+   - **Build de Produção:** `ng build` concluído com sucesso e código de saída 0.
+   - **Conformidade Clean Code:** Zero `any`, total desacoplamento da camada ECS em relação ao Three.js e descarte seguro de recursos.
+
+---
+
+## 5. Estrutura Atual de Pastas
 
 ```text
 GDD-Brick-Survivors-Overdrive/
@@ -91,12 +127,14 @@ GDD-Brick-Survivors-Overdrive/
 │   │   │   ├── core/
 │   │   │   │   └── engine/       # Motor ECS Puro (Isomórfico & Desacoplado de Three.js)
 │   │   │   │       ├── types.ts
+│   │   │   │       ├── modular-block.types.ts
+│   │   │   │       ├── object-pool.ts
+│   │   │   │       ├── modular-block.system.ts
 │   │   │   │       ├── game-loop.ts
 │   │   │   │       ├── game-world.ts
 │   │   │   │       ├── movement.system.ts
 │   │   │   │       ├── vehicle.system.ts
-│   │   │   │       ├── interaction.system.ts
-│   │   │   │       └── test/     # Suíte de testes unitários da Engine ECS
+│   │   │   │       └── interaction.system.ts
 │   │   │   ├── components/
 │   │   │   │   └── game-viewport/# Viewport 3D Three.js + HUD Arcade + Inputs
 │   │   │   ├── app.component.html
@@ -116,12 +154,12 @@ GDD-Brick-Survivors-Overdrive/
 
 ---
 
-## 5. Comandos para Execução e Testes Locais
+## 6. Comandos para Execução e Testes Locais
 
 ```bash
 # Executar suíte completa de testes no monorepo
 npm run test:backend     # 1 teste passando no NestJS
-npm run test:frontend    # 43 testes passando no Angular/Vitest
+npm run test:frontend    # 56 testes passando no Angular/Vitest
 
 # Compilações de produção
 npm run build:backend    # NestJS build
