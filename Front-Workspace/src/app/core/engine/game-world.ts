@@ -42,6 +42,9 @@ export class GameWorld {
     acceleration: 24.0,
     deceleration: 28.0,
     turnSpeed: 3.8,
+    jumpForce: 7.2,
+    gravity: 18.0,
+    isGrounded: true,
     isMoving: false,
     moveAngle: 0,
   };
@@ -82,6 +85,7 @@ export class GameWorld {
     left: false,
     right: false,
     handbrake: false,
+    jump: false,
     interact: false,
   };
 

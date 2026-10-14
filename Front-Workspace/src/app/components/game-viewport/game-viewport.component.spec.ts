@@ -89,11 +89,46 @@ describe('GameViewportComponent', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
     expect(component.world.inputState.forward).toBe(true);
 
-    // Solta W
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
     expect(component.world.inputState.forward).toBe(false);
 
-    // Pressiona Espaço (handbrake)
+    // Pressiona S (ré / backward)
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyS' }));
+    expect(component.world.inputState.backward).toBe(true);
+
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyS' }));
+    expect(component.world.inputState.backward).toBe(false);
+
+    // Pressiona A (esquerda / left)
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyA' }));
+    expect(component.world.inputState.left).toBe(true);
+
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyA' }));
+    expect(component.world.inputState.left).toBe(false);
+
+    // Pressiona D (direita / right)
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }));
+    expect(component.world.inputState.right).toBe(true);
+
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyD' }));
+    expect(component.world.inputState.right).toBe(false);
+
+    // Pressiona ArrowRight (direita / right alternativa)
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }));
+    expect(component.world.inputState.right).toBe(true);
+
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowRight' }));
+    expect(component.world.inputState.right).toBe(false);
+
+    // Pressiona Espaço a pé -> deve acionar jump
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
+    expect(component.world.inputState.jump).toBe(true);
+
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' }));
+    expect(component.world.inputState.jump).toBe(false);
+
+    // Quando pilotando o veículo -> deve acionar handbrake
+    component.world.vehicleComponent.driverEntityId = component.world.heroId;
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
     expect(component.world.inputState.handbrake).toBe(true);
 

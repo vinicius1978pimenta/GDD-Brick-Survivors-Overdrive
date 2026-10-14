@@ -701,10 +701,15 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       this.world.setInput({ right: true });
     } else if (code === 'Space') {
       event.preventDefault();
-      this.world.setInput({ handbrake: true });
+      if (this.world.isDriving()) {
+        this.world.setInput({ handbrake: true, jump: false });
+      } else {
+        this.world.setInput({ jump: true, handbrake: false });
+      }
     } else if (code === 'KeyE') {
       if (!event.repeat) {
         this.world.triggerInteract();
+        this.world.setInput({ jump: false, handbrake: false });
       }
     }
   }
@@ -721,7 +726,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     } else if (code === 'KeyD' || code === 'ArrowRight') {
       this.world.setInput({ right: false });
     } else if (code === 'Space') {
-      this.world.setInput({ handbrake: false });
+      this.world.setInput({ handbrake: false, jump: false });
     }
   }
 
@@ -808,17 +813,21 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
         this.heroGroup.scale.set(0.85, 0.85, 0.85);
       } else {
         // Herói a pé
-        this.heroGroup.position.set(hero.x, hero.y, hero.z);
+        let visualY = hero.y;
+
+        if (hero.y <= 0.01) {
+          if (this.world.heroController.isMoving) {
+            // Animação de corrida (balanço heróico no solo)
+            visualY += Math.abs(Math.sin(time * 12.0)) * 0.1;
+          } else {
+            // Respiração suave no solo
+            visualY += Math.sin(time * 3.0) * 0.03;
+          }
+        }
+
+        this.heroGroup.position.set(hero.x, visualY, hero.z);
         this.heroGroup.rotation.y = hero.rotationY;
         this.heroGroup.scale.set(1.0, 1.0, 1.0);
-
-        if (this.world.heroController.isMoving) {
-          // Animação de corrida (balanço heróico)
-          this.heroGroup.position.y = Math.abs(Math.sin(time * 12.0)) * 0.1;
-        } else {
-          // Respiração suave
-          this.heroGroup.position.y = Math.sin(time * 3.0) * 0.03;
-        }
       }
     }
 
@@ -849,7 +858,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.targetPhi += (targetTargetPhi - this.targetPhi) * (delta * 3.0);
 
     const targetLookAtX = isDriving ? vehicle.x : hero.x;
-    const targetLookAtY = isDriving ? 0.85 : 1.05;
+    const targetLookAtY = isDriving ? 0.85 : 1.05 + Math.max(0, hero.y * 0.45);
     const targetLookAtZ = isDriving ? vehicle.z : hero.z;
 
     this.lookAtX += (targetLookAtX - this.lookAtX) * lerpFactor;

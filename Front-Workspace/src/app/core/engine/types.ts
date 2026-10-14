@@ -23,6 +23,7 @@ export interface InputState {
   left: boolean;
   right: boolean;
   handbrake: boolean;
+  jump?: boolean;
   interact: boolean;
 }
 
@@ -47,6 +48,9 @@ export interface CharacterControllerComponent {
   acceleration: number;
   deceleration: number;
   turnSpeed?: number;
+  jumpForce?: number;
+  gravity?: number;
+  isGrounded?: boolean;
   isMoving: boolean;
   moveAngle: number;
 }

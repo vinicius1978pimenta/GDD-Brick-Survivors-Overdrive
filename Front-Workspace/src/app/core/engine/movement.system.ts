@@ -44,6 +44,8 @@ export function updateMovementSystem(
     velocity.vx = 0;
     velocity.vy = 0;
     velocity.vz = 0;
+    transform.y = 0;
+    controller.isGrounded = true;
     return;
   }
 
@@ -98,7 +100,40 @@ export function updateMovementSystem(
   velocity.vx = Math.sin(transform.rotationY) * controller.speed;
   velocity.vz = Math.cos(transform.rotationY) * controller.speed;
 
-  // 4. Atualização da posição física
+  // 4. Física Vertical no Eixo Y (Pulo e Gravidade)
+  const jumpForce = controller.jumpForce ?? 7.2;
+  const gravity = controller.gravity ?? 18.0;
+
+  // Se estiver no chão
+  if (transform.y <= 0) {
+    transform.y = 0;
+    if (velocity.vy <= 0) {
+      velocity.vy = 0;
+      controller.isGrounded = true;
+    }
+
+    if (input.jump && controller.isGrounded) {
+      velocity.vy = jumpForce;
+      controller.isGrounded = false;
+      input.jump = false;
+    }
+  } else {
+    // No ar: gravidade contínua
+    controller.isGrounded = false;
+    velocity.vy -= gravity * dt;
+  }
+
+  // Integração vertical
+  transform.y += velocity.vy * dt;
+
+  // Aterrissagem no solo
+  if (transform.y <= 0) {
+    transform.y = 0;
+    velocity.vy = 0;
+    controller.isGrounded = true;
+  }
+
+  // 5. Atualização da posição física horizontal (XZ)
   transform.x += velocity.vx * dt;
   transform.z += velocity.vz * dt;
 

@@ -114,4 +114,67 @@ describe('MovementSystem', () => {
     expect(normalizeAngleDifference(Math.PI, -Math.PI)).toBeCloseTo(0);
     expect(normalizeAngleDifference(Math.PI * 0.5, 0)).toBeCloseTo(Math.PI * 0.5);
   });
+
+  describe('Física Vertical & Pulo (Jump)', () => {
+    it('deve aplicar impulso vertical no eixo Y com input jump estando no solo', () => {
+      controller.jumpForce = 7.2;
+      controller.gravity = 18.0;
+      controller.isGrounded = true;
+      transform.y = 0;
+      input.jump = true;
+
+      updateMovementSystem(transform, velocity, controller, input, false, 0.05);
+
+      expect(controller.isGrounded).toBe(false);
+      expect(transform.y).toBeGreaterThan(0);
+    });
+
+    it('deve aplicar gravidade contínua quando o herói estiver no ar e aterrissar em y = 0', () => {
+      controller.gravity = 18.0;
+      transform.y = 1.0;
+      velocity.vy = 0;
+      controller.isGrounded = false;
+
+      // Primeiro passo no ar
+      updateMovementSystem(transform, velocity, controller, input, false, 0.1);
+      expect(velocity.vy).toBeLessThan(0); // Puxado para baixo pela gravidade
+
+      // Avança mais passos até tocar o chão
+      for (let i = 0; i < 10; i++) {
+        updateMovementSystem(transform, velocity, controller, input, false, 0.1);
+      }
+
+      expect(transform.y).toBe(0);
+      expect(velocity.vy).toBe(0);
+      expect(controller.isGrounded).toBe(true);
+    });
+
+    it('não deve permitir pulo duplo no ar quando já estiver sem contato com o solo', () => {
+      controller.jumpForce = 7.2;
+      controller.gravity = 18.0;
+      transform.y = 1.5;
+      velocity.vy = 1.0;
+      controller.isGrounded = false;
+      input.jump = true;
+
+      updateMovementSystem(transform, velocity, controller, input, false, 0.05);
+
+      // velocity.vy deve diminuir devido à gravidade e não resetar para jumpForce
+      expect(velocity.vy).toBeLessThan(1.0);
+      expect(controller.isGrounded).toBe(false);
+    });
+
+    it('deve zerar velocidade vertical e travar y em 0 quando estiver pilotando (isDriving = true)', () => {
+      transform.y = 1.5;
+      velocity.vy = 4.0;
+      controller.isGrounded = false;
+      input.jump = true;
+
+      updateMovementSystem(transform, velocity, controller, input, true, 0.1);
+
+      expect(transform.y).toBe(0);
+      expect(velocity.vy).toBe(0);
+      expect(controller.isGrounded).toBe(true);
+    });
+  });
 });
