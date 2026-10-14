@@ -741,7 +741,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
         this.world.setInput({ jump: false, handbrake: false });
       }
     } else if (code === 'KeyK') {
-      if (!event.repeat) {
+      if (!event.repeat && !this.world.isDriving() && this.world.vehicleTransform && this.world.getDurabilityPercentage() > 5) {
         this.world.forceDetachNextBlock();
       }
     }

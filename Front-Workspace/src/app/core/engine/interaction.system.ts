@@ -22,7 +22,11 @@ export function canInteractWithVehicle(
   heroTransform: TransformComponent,
   vehicleTransform: TransformComponent,
   maxDistance: number = VEHICLE_INTERACTION_RADIUS,
+  isDestroyed: boolean = false,
 ): boolean {
+  if (isDestroyed) {
+    return false;
+  }
   return getDistance2D(heroTransform, vehicleTransform) <= maxDistance;
 }
 
@@ -70,8 +74,12 @@ export function updateInteractionSystem(
     return { interacted: true, isNowDriving: false };
   }
 
-  // Se não estiver dirigindo, valida a distância para embarque
-  if (vehicle.driverEntityId === null && canInteractWithVehicle(heroTransform, vehicleTransform)) {
+  // Se não estiver dirigindo, valida se o veículo não está destruído e a distância para embarque
+  if (
+    !vehicle.isDestroyed &&
+    vehicle.driverEntityId === null &&
+    canInteractWithVehicle(heroTransform, vehicleTransform, VEHICLE_INTERACTION_RADIUS, vehicle.isDestroyed)
+  ) {
     vehicle.driverEntityId = heroEntityId;
 
     // Sincroniza a posição inicial do herói no assento do piloto

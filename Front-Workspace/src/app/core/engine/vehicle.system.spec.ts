@@ -111,4 +111,18 @@ describe('VehicleSystem (Arcade Physics & Drift)', () => {
     expect(transform.x).toBe(DEFAULT_ARENA_BOUNDS.maxX);
     expect(vehicle.currentSpeed).toBeLessThan(0); // Ricochete com inversão de velocidade
   });
+
+  it('deve congelar tração, velocidade e rotação quando o veículo estiver destruído', () => {
+    vehicle.isDestroyed = true;
+    vehicle.currentSpeed = 10.0;
+    input.forward = true;
+    input.left = true;
+
+    updateVehicleSystem(transform, velocity, vehicle, input, 0.1);
+
+    expect(vehicle.currentSpeed).toBe(0);
+    expect(velocity.vx).toBe(0);
+    expect(velocity.vz).toBe(0);
+    expect(velocity.angularVelocityY).toBe(0);
+  });
 });

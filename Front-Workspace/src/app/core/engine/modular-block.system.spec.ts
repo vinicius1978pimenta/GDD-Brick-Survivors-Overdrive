@@ -9,6 +9,7 @@ import {
   calculateVehicleDurability,
   createDebrisFactory,
   createDefaultBuggyBlocks,
+  dismantleVehicle,
   updateDebrisSimulation,
 } from './modular-block.system';
 import { ObjectPool } from './object-pool';
@@ -142,5 +143,14 @@ describe('ModularBlockSystem (Lego-style Destruction & Physics)', () => {
     // Partícula deve ter sido removida de activeDebris e devolvida ao debrisPool
     expect(activeDebris.length).toBe(0);
     expect(debrisPool.availableCount).toBeGreaterThan(0);
+  });
+
+  it('deve desmontar todos os blocos restantes e zerar a durabilidade com dismantleVehicle', () => {
+    dismantleVehicle(vehicle, vehicleTransform, debrisPool, activeDebris);
+
+    expect(vehicle.durabilityPercentage).toBe(0);
+    expect(vehicle.blocks.every((b) => b.isDetached)).toBe(true);
+    expect(vehicle.blocks.every((b) => b.currentHealth === 0)).toBe(true);
+    expect(activeDebris.length).toBe(vehicle.blocks.length);
   });
 });

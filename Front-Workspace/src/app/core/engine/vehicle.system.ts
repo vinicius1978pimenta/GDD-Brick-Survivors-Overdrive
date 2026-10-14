@@ -18,6 +18,17 @@ export function updateVehicleSystem(
   dt: number,
   bounds: ArenaBounds = DEFAULT_ARENA_BOUNDS,
 ): void {
+  if (vehicle.isDestroyed) {
+    vehicle.currentSpeed = 0;
+    vehicle.isDrifting = false;
+    vehicle.driftVelocityX = 0;
+    vehicle.driftVelocityZ = 0;
+    velocity.vx = 0;
+    velocity.vy = 0;
+    velocity.vz = 0;
+    return;
+  }
+
   const hasDriver = vehicle.driverEntityId !== null;
 
   if (hasDriver) {

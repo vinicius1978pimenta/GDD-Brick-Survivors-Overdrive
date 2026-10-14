@@ -19,6 +19,7 @@ import {
   applyVehicleImpactDamage,
   createDebrisFactory,
   createDefaultBuggyBlocks,
+  dismantleVehicle,
   updateDebrisSimulation,
 } from './modular-block.system';
 
@@ -179,11 +180,14 @@ export class GameWorld {
       );
     }
 
+    // Verifica se a integridade do veículo chegou a 0% e dispara a desmontagem e ejeção
+    this.checkVehicleDestruction();
+
     // 4. Atualização da Simulação de Detritos Físicos
     updateDebrisSimulation(this.activeDebris, this.debrisPool, dt, this.bounds);
 
-    // 5. Se estiver dirigindo, acopla o herói ao assento do veículo
-    if (isDriving) {
+    // 5. Se ainda estiver dirigindo, acopla o herói ao assento do veículo
+    if (this.isDriving()) {
       this.heroTransform.x = this.vehicleTransform.x;
       this.heroTransform.y = this.vehicleTransform.y + 0.35;
       this.heroTransform.z = this.vehicleTransform.z;
@@ -192,15 +196,62 @@ export class GameWorld {
   }
 
   /**
+   * Verifica se a integridade estrutural do veículo zerou. Em caso positivo,
+   * desmonta todas as peças restantes em detritos físicos, desativa os motores
+   * e ejeta o motorista com segurança para fora do veículo.
+   */
+  public checkVehicleDestruction(): void {
+    if (this.modularVehicle.durabilityPercentage === 0 && !this.vehicleComponent.isDestroyed) {
+      this.vehicleComponent.isDestroyed = true;
+      this.vehicleComponent.currentSpeed = 0;
+      this.vehicleVelocity.vx = 0;
+      this.vehicleVelocity.vy = 0;
+      this.vehicleVelocity.vz = 0;
+      this.vehicleVelocity.angularVelocityY = 0;
+
+      dismantleVehicle(
+        this.modularVehicle,
+        this.vehicleTransform,
+        this.debrisPool,
+        this.activeDebris,
+      );
+
+      // Desembarque / ejeção automática de emergência
+      if (this.isDriving()) {
+        const exitOffset = 1.8;
+        const angle = this.vehicleTransform.rotationY;
+        this.heroTransform.x = Math.max(
+          this.bounds.minX,
+          Math.min(this.bounds.maxX, this.vehicleTransform.x - exitOffset * Math.cos(angle)),
+        );
+        this.heroTransform.y = 0;
+        this.heroTransform.z = Math.max(
+          this.bounds.minZ,
+          Math.min(this.bounds.maxZ, this.vehicleTransform.z + exitOffset * Math.sin(angle)),
+        );
+        this.heroVelocity.vx = 0;
+        this.heroVelocity.vy = 0;
+        this.heroVelocity.vz = 0;
+        this.vehicleComponent.driverEntityId = null;
+      }
+    }
+  }
+
+  /**
    * Força o desprendimento imediato de uma peça de lataria (usado para testes ou disparos).
+   * Bloqueado enquanto o jogador estiver pilotando o veículo.
    */
   public forceDetachNextBlock(): boolean {
+    if (this.isDriving()) {
+      return false;
+    }
+
     const attachedBlock = this.modularVehicle.blocks.find((b) => !b.isDetached);
     if (!attachedBlock) {
       return false;
     }
 
-    return applyDamageToBlock(
+    const detached = applyDamageToBlock(
       this.modularVehicle,
       attachedBlock.id,
       attachedBlock.maxHealth + 10,
@@ -208,6 +259,9 @@ export class GameWorld {
       this.debrisPool,
       this.activeDebris,
     );
+
+    this.checkVehicleDestruction();
+    return detached;
   }
 
   public getDurabilityPercentage(): number {
@@ -225,8 +279,19 @@ export class GameWorld {
     return this.vehicleComponent.driverEntityId === this.heroId;
   }
 
+  public isVehicleDestroyed(): boolean {
+    return Boolean(
+      this.vehicleComponent.isDestroyed || this.modularVehicle.durabilityPercentage <= 0,
+    );
+  }
+
   public canInteract(): boolean {
-    return canInteractWithVehicle(this.heroTransform, this.vehicleTransform);
+    return canInteractWithVehicle(
+      this.heroTransform,
+      this.vehicleTransform,
+      undefined,
+      this.isVehicleDestroyed(),
+    );
   }
 
   public getSpeedKmh(): number {

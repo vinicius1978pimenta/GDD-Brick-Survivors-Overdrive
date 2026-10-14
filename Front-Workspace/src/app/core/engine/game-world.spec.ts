@@ -86,4 +86,55 @@ describe('GameWorld (ECS Coordinator)', () => {
     expect(world.getDurabilityPercentage()).toBeLessThan(100);
     expect(world.activeDebris.length).toBeGreaterThan(0);
   });
+
+  it('não deve permitir forceDetachNextBlock enquanto o jogador estiver pilotando o veículo', () => {
+    world.vehicleComponent.driverEntityId = world.heroId;
+    expect(world.isDriving()).toBe(true);
+
+    const detached = world.forceDetachNextBlock();
+    expect(detached).toBe(false);
+    expect(world.getDurabilityPercentage()).toBe(100);
+    expect(world.activeDebris.length).toBe(0);
+  });
+
+  it('deve desativar veículo e ejetar o condutor quando a durabilidade zerar (destruição total estilo LEGO)', () => {
+    // Embarca
+    world.heroTransform.x = 3.5;
+    world.heroTransform.z = -2.5;
+    world.triggerInteract();
+    world.fixedUpdate(0.016);
+    expect(world.isDriving()).toBe(true);
+
+    // Zera os blocos da lataria
+    world.modularVehicle.durabilityPercentage = 0;
+    for (const b of world.modularVehicle.blocks) {
+      b.currentHealth = 0;
+    }
+
+    world.checkVehicleDestruction();
+
+    expect(world.vehicleComponent.isDestroyed).toBe(true);
+    expect(world.vehicleComponent.currentSpeed).toBe(0);
+    expect(world.isDriving()).toBe(false); // Ejetado com segurança
+    expect(world.heroTransform.x).not.toBe(world.vehicleTransform.x);
+  });
+
+  it('não deve permitir interação ou reembarque se o veículo estiver destruído', () => {
+    // Aproxima o herói do veículo
+    world.heroTransform.x = 3.5;
+    world.heroTransform.z = -2.5;
+
+    expect(world.canInteract()).toBe(true);
+
+    // Destrói o veículo
+    world.vehicleComponent.isDestroyed = true;
+
+    expect(world.isVehicleDestroyed()).toBe(true);
+    expect(world.canInteract()).toBe(false);
+
+    world.triggerInteract();
+    world.fixedUpdate(0.016);
+
+    expect(world.isDriving()).toBe(false);
+  });
 });

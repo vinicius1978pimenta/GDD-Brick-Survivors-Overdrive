@@ -322,3 +322,23 @@ export function updateDebrisSimulation(
     }
   }
 }
+
+/**
+ * Desmonta completamente o veículo ejetando todos os blocos restantes no ObjectPool de detritos,
+ * zerando a durabilidade estrutural.
+ */
+export function dismantleVehicle(
+  vehicle: ModularVehicleComponent,
+  vehicleTransform: TransformComponent,
+  debrisPool: ObjectPool<DebrisParticle>,
+  activeDebris: DebrisParticle[],
+): void {
+  for (const block of vehicle.blocks) {
+    if (!block.isDetached) {
+      block.isDetached = true;
+      block.currentHealth = 0;
+      spawnDebrisFromBlock(block, vehicleTransform, debrisPool, activeDebris);
+    }
+  }
+  vehicle.durabilityPercentage = 0;
+}

@@ -40,14 +40,21 @@ describe('GameViewportComponent', () => {
     const container = compiled.querySelector('.viewport-container');
     const canvas = compiled.querySelector('canvas.render-canvas');
     const speedCard = compiled.querySelector('.speedometer-card');
-    const durabilityCard = compiled.querySelector('.durability-card');
     const modeBadge = compiled.querySelector('.mode-badge');
 
     expect(container).not.toBeNull();
     expect(canvas).not.toBeNull();
     expect(speedCard).not.toBeNull();
-    expect(durabilityCard?.textContent).toContain('BLINDAGEM');
     expect(modeBadge?.textContent).toContain('A PÉ (HERÓI)');
+
+    // Blindagem não deve ser exibida a pé
+    expect(compiled.querySelector('.durability-card')).toBeNull();
+
+    // Blindagem deve ser exibida ao pilotar o veículo
+    component.isDriving.set(true);
+    fixture.detectChanges();
+    const durabilityCard = compiled.querySelector('.durability-card');
+    expect(durabilityCard?.textContent).toContain('BLINDAGEM');
   });
 
   it('deve exibir o alerta de DRIFT quando o sinal isDrifting estiver ativo', () => {
@@ -141,11 +148,55 @@ describe('GameViewportComponent', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' }));
     expect(component.world.inputState.interact).toBe(true);
 
-    // Pressiona K (destruição forçada de bloco de teste)
-    const initialDurability = component.world.getDurabilityPercentage();
+    // Pressiona K enquanto pilotando -> NÃO deve descolar bloco
+    const durabilityWhileDriving = component.world.getDurabilityPercentage();
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyK' }));
-    expect(component.world.getDurabilityPercentage()).toBeLessThan(initialDurability);
+    expect(component.world.getDurabilityPercentage()).toBe(durabilityWhileDriving);
+    expect(component.world.activeDebris.length).toBe(0);
+
+    // Desembarca herói (a pé)
+    component.world.vehicleComponent.driverEntityId = null;
+
+    // Pressiona K a pé -> descola bloco normalmente
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyK' }));
+    expect(component.world.getDurabilityPercentage()).toBeLessThan(durabilityWhileDriving);
     expect(component.world.activeDebris.length).toBeGreaterThan(0);
+  });
+
+  it('não deve exibir a instrução da tecla K no painel de controles do HUD nem a pé nem pilotando', () => {
+    // A pé
+    component.isDriving.set(false);
+    fixture.detectChanges();
+    let compiled = fixture.nativeElement as HTMLElement;
+    let kbdK = Array.from(compiled.querySelectorAll('.instruction-item kbd')).find(
+      (el) => el.textContent?.trim() === 'K',
+    );
+    expect(kbdK).toBeUndefined();
+
+    // Pilotando
+    component.isDriving.set(true);
+    fixture.detectChanges();
+    compiled = fixture.nativeElement as HTMLElement;
+    kbdK = Array.from(compiled.querySelectorAll('.instruction-item kbd')).find(
+      (el) => el.textContent?.trim() === 'K',
+    );
+    expect(kbdK).toBeUndefined();
+  });
+
+  it('não deve exibir o prompt de entrar nem a instrução E quando o veículo estiver inacessível ou destruído', () => {
+    // Longe ou destruído -> canInteract é false
+    component.isDriving.set(false);
+    component.canInteract.set(false);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const promptInteract = compiled.querySelector('.prompt-interact');
+    expect(promptInteract).toBeNull();
+
+    const kbdE = Array.from(compiled.querySelectorAll('.instruction-item kbd')).find(
+      (el) => el.textContent?.trim() === 'E',
+    );
+    expect(kbdE).toBeUndefined();
   });
 
   it('deve executar o ciclo de vida ngAfterViewInit e ngOnDestroy limpando recursos sem erros', () => {

@@ -39,6 +39,7 @@ export interface VehicleComponent {
   driverEntityId: number | null;
   driftVelocityX: number;
   driftVelocityZ: number;
+  isDestroyed?: boolean;
 }
 
 export interface CharacterControllerComponent {

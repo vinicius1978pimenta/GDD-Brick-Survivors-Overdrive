@@ -109,4 +109,22 @@ describe('InteractionSystem (Mount / Dismount)', () => {
     expect(heroTransform.x).not.toBe(vehicleTransform.x);
     expect(heroVelocity.vx).toBe(0);
   });
+
+  it('não deve permitir embarque se o veículo estiver destruído', () => {
+    vehicle.isDestroyed = true;
+    input.interact = true;
+
+    const result = updateInteractionSystem(
+      heroTransform,
+      heroVelocity,
+      vehicleTransform,
+      vehicle,
+      input,
+      1,
+    );
+
+    expect(result.interacted).toBe(false);
+    expect(result.isNowDriving).toBe(false);
+    expect(vehicle.driverEntityId).toBeNull();
+  });
 });
