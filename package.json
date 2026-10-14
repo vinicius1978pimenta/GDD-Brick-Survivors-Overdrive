@@ -10,6 +10,12 @@
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
     "docker:logs:backend": "docker compose logs -f backend",
-    "docker:logs:db": "docker compose logs -f postgres"
+    "docker:logs:db": "docker compose logs -f postgres",
+    "start:backend": "npm --prefix back-workspace run start:dev",
+    "start:frontend": "npm --prefix Front-Workspace start",
+    "build:backend": "npm --prefix back-workspace run build",
+    "build:frontend": "npm --prefix Front-Workspace run build",
+    "test:backend": "npm --prefix back-workspace test",
+    "test:frontend": "npm --prefix Front-Workspace test"
   }
 }
