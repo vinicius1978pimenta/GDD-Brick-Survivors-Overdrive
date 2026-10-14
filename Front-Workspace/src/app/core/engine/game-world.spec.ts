@@ -59,4 +59,31 @@ describe('GameWorld (ECS Coordinator)', () => {
 
     expect(world.heroTransform.z).not.toBe(0);
   });
+
+  it('deve inicializar com lataria modular em 100% e permitir desprendimento forçado', () => {
+    expect(world.getDurabilityPercentage()).toBe(100);
+    expect(world.modularVehicle.blocks.length).toBeGreaterThan(4);
+    expect(world.activeDebris.length).toBe(0);
+
+    // Força o desprendimento de um bloco
+    const detached = world.forceDetachNextBlock();
+    expect(detached).toBe(true);
+    expect(world.getDurabilityPercentage()).toBeLessThan(100);
+    expect(world.activeDebris.length).toBe(1);
+
+    // O detrito ejetado tem velocidade física ativa
+    const debris = world.activeDebris[0];
+    expect(debris.active).toBe(true);
+    expect(debris.vy).toBeGreaterThan(0);
+  });
+
+  it('deve processar colisão com muretas da arena e ejetar detritos em impacto de alta velocidade', () => {
+    world.vehicleTransform.x = world.bounds.maxX;
+    world.vehicleComponent.currentSpeed = 12.0;
+
+    world.fixedUpdate(0.016);
+
+    expect(world.getDurabilityPercentage()).toBeLessThan(100);
+    expect(world.activeDebris.length).toBeGreaterThan(0);
+  });
 });

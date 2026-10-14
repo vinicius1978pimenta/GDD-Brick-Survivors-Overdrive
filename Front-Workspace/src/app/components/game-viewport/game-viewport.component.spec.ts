@@ -40,11 +40,13 @@ describe('GameViewportComponent', () => {
     const container = compiled.querySelector('.viewport-container');
     const canvas = compiled.querySelector('canvas.render-canvas');
     const speedCard = compiled.querySelector('.speedometer-card');
+    const durabilityCard = compiled.querySelector('.durability-card');
     const modeBadge = compiled.querySelector('.mode-badge');
 
     expect(container).not.toBeNull();
     expect(canvas).not.toBeNull();
     expect(speedCard).not.toBeNull();
+    expect(durabilityCard?.textContent).toContain('BLINDAGEM');
     expect(modeBadge?.textContent).toContain('A PÉ (HERÓI)');
   });
 
@@ -138,6 +140,12 @@ describe('GameViewportComponent', () => {
     // Pressiona E (interact)
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' }));
     expect(component.world.inputState.interact).toBe(true);
+
+    // Pressiona K (destruição forçada de bloco de teste)
+    const initialDurability = component.world.getDurabilityPercentage();
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyK' }));
+    expect(component.world.getDurabilityPercentage()).toBeLessThan(initialDurability);
+    expect(component.world.activeDebris.length).toBeGreaterThan(0);
   });
 
   it('deve executar o ciclo de vida ngAfterViewInit e ngOnDestroy limpando recursos sem erros', () => {

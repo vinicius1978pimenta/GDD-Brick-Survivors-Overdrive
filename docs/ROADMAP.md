@@ -11,7 +11,7 @@ Este documento descreve o plano de desenvolvimento do **Brick Survivors: Overdri
 | **Fase 1** | Fundação do Monorepo, Infraestrutura e Agentes | **Concluída** | Orquestrador / Time Base |
 | **Fase 2** | Cena 3D Local no Front-End (Three.js & Viewport) | **Concluída** | Especialista Front-End / Engine |
 | **Fase 3** | Movimentação, Física Arcade e Controle de Veículos | **Concluída** | Especialista Front-End & Game Architecture |
-| **Fase 4** | Sistema Modular de Blocos e Destruição Estilo Lego | **Próxima (Pronta para Iniciar)** | Especialista de Game Architecture |
+| **Fase 4** | Sistema Modular de Blocos e Destruição Estilo Lego | **Em Andamento** | Especialista Front-End & Game Architecture |
 | **Fase 5** | Netcode Autoritativo (NestJS Socket.IO, Predição & Reconciliação) | Planejada | Especialista Back-End & Netcode |
 | **Fase 6** | Sistema de Combate, Armas Fictícias e Object Pooling | Planejada | Especialista de Game Architecture |
 | **Fase 7** | Modos de Jogo (Sobrevivência Co-op & Combate PvP) | Planejada | Time Integrado |

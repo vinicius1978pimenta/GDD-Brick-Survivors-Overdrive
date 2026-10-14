@@ -147,6 +147,70 @@
   transition: width 0.08s ease-out;
 }
 
+.durability-card {
+  background: rgba(13, 17, 23, 0.88);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  padding: 0.4rem 0.75rem;
+  min-width: 130px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: all 0.3s ease;
+}
+
+.durability-card.durability-mid {
+  border-color: rgba(252, 209, 22, 0.6);
+  box-shadow: 0 0 10px rgba(252, 209, 22, 0.25);
+}
+
+.durability-card.durability-low {
+  border-color: rgba(239, 68, 68, 0.8);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.4);
+  animation: pulse-drift 0.8s ease-in-out infinite alternate;
+}
+
+.durability-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #38bdf8;
+}
+
+.durability-card.durability-mid .durability-header {
+  color: #fcd116;
+}
+
+.durability-card.durability-low .durability-header {
+  color: #ef4444;
+}
+
+.durability-bar-container {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  margin-top: 0.25rem;
+  overflow: hidden;
+}
+
+.durability-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981 0%, #38bdf8 100%);
+  border-radius: 2px;
+  transition: width 0.15s ease-out;
+}
+
+.durability-card.durability-mid .durability-bar-fill {
+  background: #fcd116;
+}
+
+.durability-card.durability-low .durability-bar-fill {
+  background: #ef4444;
+}
+
 .badge-drift {
   display: inline-flex;
   align-items: center;

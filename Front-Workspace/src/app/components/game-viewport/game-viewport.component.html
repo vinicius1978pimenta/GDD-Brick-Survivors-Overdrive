@@ -26,6 +26,18 @@
       </div>
     </div>
 
+    <!-- Card de Integridade da Blindagem (Blocos LEGO) -->
+    <div class="durability-card" [class.durability-low]="durabilityPercentage() < 35" [class.durability-mid]="durabilityPercentage() < 70 && durabilityPercentage() >= 35">
+      <div class="durability-header">
+        <span class="durability-icon">🛡️</span>
+        <span class="durability-title">BLINDAGEM</span>
+        <span class="durability-val">{{ durabilityPercentage() }}%</span>
+      </div>
+      <div class="durability-bar-container">
+        <div class="durability-bar-fill" [style.width.%]="durabilityPercentage()"></div>
+      </div>
+    </div>
+
     @if (isDrifting()) {
       <div class="badge-drift">
         <span class="drift-flame">🔥</span>
@@ -62,6 +74,10 @@
     <div class="instruction-item">
       <kbd>E</kbd>
       <span>Entrar / Sair</span>
+    </div>
+    <div class="instruction-item">
+      <kbd>K</kbd>
+      <span>Ejetar Bloco</span>
     </div>
     <div class="instruction-item">
       <kbd>Mouse</kbd>

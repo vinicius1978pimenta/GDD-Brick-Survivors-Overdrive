@@ -12,6 +12,15 @@ import {
   VelocityComponent,
 } from './types';
 import { updateVehicleSystem } from './vehicle.system';
+import { ObjectPool } from './object-pool';
+import { DebrisParticle, ModularVehicleComponent } from './modular-block.types';
+import {
+  applyDamageToBlock,
+  applyVehicleImpactDamage,
+  createDebrisFactory,
+  createDefaultBuggyBlocks,
+  updateDebrisSimulation,
+} from './modular-block.system';
 
 /**
  * GameWorld coordena a simulação ECS isomórfica e pura de Brick Survivors: Overdrive.
@@ -78,6 +87,22 @@ export class GameWorld {
     driftVelocityZ: 0,
   };
 
+  // Componente de Lataria Modular e Destruição (Blocos LEGO)
+  public readonly modularVehicle: ModularVehicleComponent = {
+    blocks: createDefaultBuggyBlocks(),
+    durabilityPercentage: 100,
+    mass: 850,
+  };
+
+  // ObjectPool de Detritos Físicos
+  public readonly debrisPool: ObjectPool<DebrisParticle> = new ObjectPool<DebrisParticle>(
+    createDebrisFactory(),
+    undefined,
+    24,
+    128,
+  );
+  public readonly activeDebris: DebrisParticle[] = [];
+
   // Estado de Entrada (Inputs)
   public readonly inputState: InputState = {
     forward: false,
@@ -125,7 +150,9 @@ export class GameWorld {
       this.bounds,
     );
 
-    // 3. Sistema de Física Veicular
+    // 3. Sistema de Física Veicular com Detecção de Impacto
+    const speedBefore = Math.abs(this.vehicleComponent.currentSpeed);
+
     updateVehicleSystem(
       this.vehicleTransform,
       this.vehicleVelocity,
@@ -135,13 +162,56 @@ export class GameWorld {
       this.bounds,
     );
 
-    // 4. Se estiver dirigindo, acopla o herói ao assento do veículo
+    // Detecta impacto brusco com bordas da arena
+    const isAtBoundary =
+      this.vehicleTransform.x <= this.bounds.minX ||
+      this.vehicleTransform.x >= this.bounds.maxX ||
+      this.vehicleTransform.z <= this.bounds.minZ ||
+      this.vehicleTransform.z >= this.bounds.maxZ;
+
+    if (isAtBoundary && speedBefore > 4.5) {
+      applyVehicleImpactDamage(
+        this.modularVehicle,
+        this.vehicleTransform,
+        speedBefore,
+        this.debrisPool,
+        this.activeDebris,
+      );
+    }
+
+    // 4. Atualização da Simulação de Detritos Físicos
+    updateDebrisSimulation(this.activeDebris, this.debrisPool, dt, this.bounds);
+
+    // 5. Se estiver dirigindo, acopla o herói ao assento do veículo
     if (isDriving) {
       this.heroTransform.x = this.vehicleTransform.x;
       this.heroTransform.y = this.vehicleTransform.y + 0.35;
       this.heroTransform.z = this.vehicleTransform.z;
       this.heroTransform.rotationY = this.vehicleTransform.rotationY;
     }
+  }
+
+  /**
+   * Força o desprendimento imediato de uma peça de lataria (usado para testes ou disparos).
+   */
+  public forceDetachNextBlock(): boolean {
+    const attachedBlock = this.modularVehicle.blocks.find((b) => !b.isDetached);
+    if (!attachedBlock) {
+      return false;
+    }
+
+    return applyDamageToBlock(
+      this.modularVehicle,
+      attachedBlock.id,
+      attachedBlock.maxHealth + 10,
+      this.vehicleTransform,
+      this.debrisPool,
+      this.activeDebris,
+    );
+  }
+
+  public getDurabilityPercentage(): number {
+    return this.modularVehicle.durabilityPercentage;
   }
 
   /**

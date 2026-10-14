@@ -34,6 +34,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   public readonly isDriving = signal(false);
   public readonly canInteract = signal(false);
   public readonly isDrifting = signal(false);
+  public readonly durabilityPercentage = signal(100);
   public readonly speedPercentage = computed(() =>
     Math.min(100, Math.round((this.speedKmh() / 90) * 100)),
   );
@@ -47,6 +48,8 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   private heroGroup: THREE.Group | null = null;
   private vehicleGroup: THREE.Group | null = null;
   private wheelMeshes: THREE.Mesh[] = [];
+  private modularBlockMeshes = new Map<string, THREE.Mesh>();
+  private debrisMeshes = new Map<number, THREE.Mesh>();
   private studTexture: THREE.CanvasTexture | null = null;
 
   private animationFrameId: number | null = null;
@@ -601,6 +604,32 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       this.vehicleGroup.add(wheelHolder);
     }
 
+    // 7. Blocos Modulares Destrutíveis da Lataria (Lego-style Modular Blocks)
+    this.modularBlockMeshes.clear();
+    for (const block of this.world.modularVehicle.blocks) {
+      const blockGeo = new THREE.BoxGeometry(block.size.w, block.size.h, block.size.d);
+      const blockMat = new THREE.MeshStandardMaterial({
+        color: block.colorHex,
+        roughness: 0.35,
+        metalness: 0.15,
+      });
+
+      const blockMesh = new THREE.Mesh(blockGeo, blockMat);
+      blockMesh.position.set(block.relativePos.x, block.relativePos.y, block.relativePos.z);
+      blockMesh.castShadow = true;
+      blockMesh.receiveShadow = true;
+
+      // Pino central decorativo (stud) no topo do bloco modular
+      const studGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.08, 12);
+      const studMesh = new THREE.Mesh(studGeo, blockMat);
+      studMesh.position.set(0, block.size.h / 2 + 0.04, 0);
+      studMesh.castShadow = true;
+      blockMesh.add(studMesh);
+
+      this.modularBlockMeshes.set(block.id, blockMesh);
+      this.vehicleGroup.add(blockMesh);
+    }
+
     // Posição inicial a partir do GameWorld
     this.vehicleGroup.position.set(
       this.world.vehicleTransform.x,
@@ -710,6 +739,10 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       if (!event.repeat) {
         this.world.triggerInteract();
         this.world.setInput({ jump: false, handbrake: false });
+      }
+    } else if (code === 'KeyK') {
+      if (!event.repeat) {
+        this.world.forceDetachNextBlock();
       }
     }
   }
@@ -885,6 +918,54 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
 
     this.updateCameraPosition();
 
+    // Sincroniza a visibilidade dos blocos modulares da lataria
+    for (const block of this.world.modularVehicle.blocks) {
+      const blockMesh = this.modularBlockMeshes.get(block.id);
+      if (blockMesh) {
+        blockMesh.visible = !block.isDetached;
+      }
+    }
+
+    // Sincronização visual de peças de detritos desprendidas da lataria
+    if (this.scene) {
+      const activeIds = new Set<number>();
+
+      for (const p of this.world.activeDebris) {
+        activeIds.add(p.id);
+        let mesh = this.debrisMeshes.get(p.id);
+
+        if (!mesh) {
+          const debrisGeo = new THREE.BoxGeometry(p.size.w, p.size.h, p.size.d);
+          const debrisMat = new THREE.MeshStandardMaterial({
+            color: p.colorHex,
+            roughness: 0.35,
+            metalness: 0.2,
+          });
+          mesh = new THREE.Mesh(debrisGeo, debrisMat);
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          this.scene.add(mesh);
+          this.debrisMeshes.set(p.id, mesh);
+        }
+
+        mesh.position.set(p.x, p.y, p.z);
+        mesh.rotation.set(p.rotX, p.rotY, p.rotZ);
+      }
+
+      for (const [id, mesh] of this.debrisMeshes.entries()) {
+        if (!activeIds.has(id)) {
+          this.scene.remove(mesh);
+          mesh.geometry.dispose();
+          if (Array.isArray(mesh.material)) {
+            mesh.material.forEach((m) => m.dispose());
+          } else {
+            mesh.material.dispose();
+          }
+          this.debrisMeshes.delete(id);
+        }
+      }
+    }
+
     // 4. Atualização dos Sinais Reativos do HUD (a cada ~60ms para performance)
     this.hudUpdateTimer += delta;
     if (this.hudUpdateTimer >= 0.06) {
@@ -894,18 +975,21 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       const currentDriving = this.world.isDriving();
       const currentInteract = this.world.canInteract();
       const currentDrift = this.world.isDrifting();
+      const currentDurability = this.world.getDurabilityPercentage();
 
       if (
         this.speedKmh() !== currentKmh ||
         this.isDriving() !== currentDriving ||
         this.canInteract() !== currentInteract ||
-        this.isDrifting() !== currentDrift
+        this.isDrifting() !== currentDrift ||
+        this.durabilityPercentage() !== currentDurability
       ) {
         this.ngZone.run(() => {
           this.speedKmh.set(currentKmh);
           this.isDriving.set(currentDriving);
           this.canInteract.set(currentInteract);
           this.isDrifting.set(currentDrift);
+          this.durabilityPercentage.set(currentDurability);
         });
       }
     }
@@ -947,5 +1031,16 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.heroGroup = null;
     this.vehicleGroup = null;
     this.wheelMeshes = [];
+
+    for (const mesh of this.debrisMeshes.values()) {
+      mesh.geometry.dispose();
+      if (Array.isArray(mesh.material)) {
+        mesh.material.forEach((mat) => mat.dispose());
+      } else if (mesh.material) {
+        mesh.material.dispose();
+      }
+    }
+    this.debrisMeshes.clear();
+    this.modularBlockMeshes.clear();
   }
 }
