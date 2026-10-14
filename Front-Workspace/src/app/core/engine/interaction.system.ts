@@ -30,6 +30,15 @@ export function canInteractWithVehicle(
   return getDistance2D(heroTransform, vehicleTransform) <= maxDistance;
 }
 
+export const MAX_DISMOUNT_SPEED = 0.5;
+
+/**
+ * Verifica se o jogador pode desembarcar com segurança (veículo com velocidade quase nula).
+ */
+export function canDismountVehicle(vehicle: VehicleComponent): boolean {
+  return vehicle.driverEntityId !== null && Math.abs(vehicle.currentSpeed) <= MAX_DISMOUNT_SPEED;
+}
+
 /**
  * Sistema de Interação: Embarque e Desembarque de Veículos de Blocos.
  */
@@ -52,7 +61,7 @@ export function updateInteractionSystem(
   input.interact = false;
 
   if (isCurrentlyDriving) {
-    // Desembarque: posiciona o herói ao lado esquerdo do veículo
+    // Desembarque permitido em qualquer velocidade: posiciona o herói ao lado esquerdo do veículo
     vehicle.driverEntityId = null;
 
     const exitDistance = 1.6;

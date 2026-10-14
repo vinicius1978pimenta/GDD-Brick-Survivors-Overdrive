@@ -38,6 +38,9 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   public readonly speedPercentage = computed(() =>
     Math.min(100, Math.round((this.speedKmh() / 90) * 100)),
   );
+  public readonly canDismount = computed(
+    () => this.isDriving() && this.speedKmh() === 0,
+  );
 
   // Instância do mundo de física e regras de jogo (100% desacoplado de Three.js)
   public readonly world = new GameWorld();

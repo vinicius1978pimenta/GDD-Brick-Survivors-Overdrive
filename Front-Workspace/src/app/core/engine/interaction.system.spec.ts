@@ -6,8 +6,10 @@ import {
   VelocityComponent,
 } from './types';
 import {
+  canDismountVehicle,
   canInteractWithVehicle,
   getDistance2D,
+  MAX_DISMOUNT_SPEED,
   updateInteractionSystem,
 } from './interaction.system';
 
@@ -126,5 +128,35 @@ describe('InteractionSystem (Mount / Dismount)', () => {
     expect(result.interacted).toBe(false);
     expect(result.isNowDriving).toBe(false);
     expect(vehicle.driverEntityId).toBeNull();
+  });
+
+  it('deve permitir o desembarque do veículo mesmo em movimento ao pressionar [E]', () => {
+    vehicle.driverEntityId = 1;
+    vehicle.currentSpeed = 12.0; // Em alta velocidade
+    input.interact = true;
+
+    const result = updateInteractionSystem(
+      heroTransform,
+      heroVelocity,
+      vehicleTransform,
+      vehicle,
+      input,
+      1,
+    );
+
+    // Desembarque em movimento permitido com sucesso
+    expect(result.interacted).toBe(true);
+    expect(result.isNowDriving).toBe(false);
+    expect(vehicle.driverEntityId).toBeNull();
+    expect(heroTransform.x).not.toBe(vehicleTransform.x);
+  });
+
+  it('deve calcular canDismountVehicle com segurança apenas quando parado (velocidade <= MAX_DISMOUNT_SPEED)', () => {
+    vehicle.driverEntityId = 1;
+    vehicle.currentSpeed = 5.0; // Em movimento
+    expect(canDismountVehicle(vehicle)).toBe(false);
+
+    vehicle.currentSpeed = 0.3; // Parado
+    expect(canDismountVehicle(vehicle)).toBe(true);
   });
 });

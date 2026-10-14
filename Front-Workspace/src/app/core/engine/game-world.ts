@@ -1,5 +1,9 @@
 import { GameLoop } from './game-loop';
-import { updateInteractionSystem, canInteractWithVehicle } from './interaction.system';
+import {
+  updateInteractionSystem,
+  canInteractWithVehicle,
+  canDismountVehicle,
+} from './interaction.system';
 import { updateMovementSystem } from './movement.system';
 import {
   ArenaBounds,
@@ -292,6 +296,10 @@ export class GameWorld {
       undefined,
       this.isVehicleDestroyed(),
     );
+  }
+
+  public canDismount(): boolean {
+    return canDismountVehicle(this.vehicleComponent);
   }
 
   public getSpeedKmh(): number {

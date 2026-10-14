@@ -80,15 +80,33 @@ describe('GameViewportComponent', () => {
     expect(prompt?.textContent).toContain('Dirigir Buggy de Blocos');
   });
 
-  it('deve exibir o prompt de desembarque quando estiver pilotando o veículo', () => {
+  it('deve exibir o prompt e instrução de desembarque apenas quando parado e ocultar em movimento', () => {
     component.isDriving.set(true);
+    component.speedKmh.set(0); // Parado
     fixture.detectChanges();
 
-    const compiled = fixture.nativeElement as HTMLElement;
-    const prompt = compiled.querySelector('.prompt-dismount');
-
+    let compiled = fixture.nativeElement as HTMLElement;
+    let prompt = compiled.querySelector('.prompt-dismount');
     expect(prompt).not.toBeNull();
     expect(prompt?.textContent).toContain('Desembarcar do Veículo');
+
+    let itemE = Array.from(compiled.querySelectorAll('.instruction-item')).find(
+      (el) => el.textContent?.includes('Desembarcar'),
+    );
+    expect(itemE).toBeDefined();
+
+    // Em movimento (velocidade > 0)
+    component.speedKmh.set(30);
+    fixture.detectChanges();
+
+    compiled = fixture.nativeElement as HTMLElement;
+    prompt = compiled.querySelector('.prompt-dismount');
+    expect(prompt).toBeNull();
+
+    itemE = Array.from(compiled.querySelectorAll('.instruction-item')).find(
+      (el) => el.textContent?.includes('Desembarcar'),
+    );
+    expect(itemE).toBeUndefined();
   });
 
   it('deve capturar eventos do teclado (WASD, Espaço e E) atualizando o estado do mundo', () => {
@@ -197,6 +215,22 @@ describe('GameViewportComponent', () => {
       (el) => el.textContent?.trim() === 'E',
     );
     expect(kbdE).toBeUndefined();
+  });
+
+  it('deve rotacionar a câmera livremente com eventos pointermove sem exigir clique/arrasto', () => {
+    fixture.detectChanges();
+
+    // Primeiro pointermove para inicializar a posição de referência
+    window.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 300, clientY: 250 }),
+    );
+
+    // Segundo pointermove simulando movimento do mouse para a direita e para cima
+    expect(() => {
+      window.dispatchEvent(
+        new PointerEvent('pointermove', { clientX: 340, clientY: 230 }),
+      );
+    }).not.toThrow();
   });
 
   it('deve executar o ciclo de vida ngAfterViewInit e ngOnDestroy limpando recursos sem erros', () => {
