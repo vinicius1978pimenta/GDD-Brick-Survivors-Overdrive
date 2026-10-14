@@ -56,13 +56,13 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   // Parâmetros orbitais da câmera adaptativa
   private targetTheta = Math.PI;
   private currentTheta = Math.PI;
-  private targetPhi = Math.PI / 3.4;
-  private currentPhi = Math.PI / 3.4;
+  private targetPhi = Math.PI / 2.55;
+  private currentPhi = Math.PI / 2.55;
   private targetRadius = 7.5;
   private currentRadius = 7.5;
 
   private lookAtX = 0;
-  private lookAtY = 1.2;
+  private lookAtY = 1.05;
   private lookAtZ = 0;
 
   private isDragging = false;
@@ -156,7 +156,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.targetTheta = this.world.heroTransform.rotationY + Math.PI;
     this.currentTheta = this.targetTheta;
     this.lookAtX = this.world.heroTransform.x;
-    this.lookAtY = 1.35;
+    this.lookAtY = 1.05;
     this.lookAtZ = this.world.heroTransform.z;
     this.updateCameraPosition();
 
@@ -842,14 +842,14 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
 
     // 3. Câmera em Terceira Pessoa Adaptativa
     const targetTargetRadius = isDriving ? 10.5 : 7.5;
-    const targetTargetPhi = isDriving ? Math.PI / 3.2 : Math.PI / 3.4;
+    const targetTargetPhi = isDriving ? Math.PI / 2.55 : Math.PI / 2.55;
 
     const lerpFactor = Math.min(1, delta * 7.5);
     this.targetRadius += (targetTargetRadius - this.targetRadius) * (delta * 3.0);
     this.targetPhi += (targetTargetPhi - this.targetPhi) * (delta * 3.0);
 
     const targetLookAtX = isDriving ? vehicle.x : hero.x;
-    const targetLookAtY = isDriving ? 1.0 : 1.35;
+    const targetLookAtY = isDriving ? 0.85 : 1.05;
     const targetLookAtZ = isDriving ? vehicle.z : hero.z;
 
     this.lookAtX += (targetLookAtX - this.lookAtX) * lerpFactor;
