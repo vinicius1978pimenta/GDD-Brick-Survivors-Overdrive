@@ -56,14 +56,17 @@ A **Fase 3: Movimentação, Física Arcade e Controle de Veículos** foi entregu
    - **Controles de Teclado**: WASD / Setas para movimentação/direção, Espaço para Drift / Freio de mão e E para interação.
 
 3. **Auditoria de Qualidade e Testes Automatizados (QA):**
-   - **Suíte de Testes:** **37 testes unitários aprovados (100% de sucesso em 7 suítes com Vitest)**:
+   - **Suíte de Testes:** **39 testes unitários aprovados (100% de sucesso em 7 suítes com Vitest)**:
      - `vehicle.system.spec.ts` (7 testes): aceleração, freio, marcha ré, drift com freio de mão, desaceleração por arrasto e colisão com bordas da arena.
-     - `movement.system.spec.ts` (6 testes): locomoção WASD, rotação suave e confinamento na arena.
+     - `movement.system.spec.ts` (8 testes): locomoção arcade no plano visual, rotação suave com A/D, recuo/marcha ré com S, giro no próprio eixo, desaceleração e confinamento na arena.
      - `interaction.system.spec.ts` (4 testes): embarque, desembarque, validação de distância e bloqueio sem proximidade.
      - `game-world.spec.ts` (5 testes): integração do mundo ECS e atualização síncrona.
      - `game-loop.spec.ts` (5 testes): fixed timestep de 60Hz e acumulador.
      - `game-viewport.component.spec.ts` (7 testes): rendering, HUD reativo, prompt de proximidade e ciclo de vida.
      - `app.spec.ts` (3 testes): estrutura e montagem da aplicação.
+   - **Refinamento Pré-Fase 4 (Câmera & Controle WASD Unificado):**
+     - Câmera em terceira pessoa com foco direto nas costas do herói a pé (`rotationY + Math.PI`), mantendo o mesmo padrão fluido de acompanhamento veicular.
+     - Movimentação do herói a pé alinhada com o modelo veicular arcade: `W` avança na direção do olhar, `S` recua de marcha ré mantendo o enquadramento, `A`/`D` esterçam a orientação angular permitindo curvas suaves e giro no próprio eixo.
    - **Build de Produção:** `ng build` concluído com sucesso e código de saída 0.
    - **Conformidade Clean Code:** Zero uso de `any`, estrita separação entre simulação matemática e renderizador Three.js, e descarte total de recursos no `ngOnDestroy`.
 
@@ -117,7 +120,7 @@ GDD-Brick-Survivors-Overdrive/
 ```bash
 # Executar suíte completa de testes no monorepo
 npm run test:backend     # 1 teste passando no NestJS
-npm run test:frontend    # 37 testes passando no Angular/Vitest
+npm run test:frontend    # 39 testes passando no Angular/Vitest
 
 # Compilações de produção
 npm run build:backend    # NestJS build
