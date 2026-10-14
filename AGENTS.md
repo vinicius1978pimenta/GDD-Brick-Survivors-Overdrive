@@ -16,6 +16,8 @@ As seguintes skills estão configuradas e prontas para uso em `.agents/skills/`:
    - Separação Smart/Dumb components, gerenciamento de estado, tokens de design, acessibilidade (a11y) e design moderno.
 4. **Garantia de Qualidade & Testes (QA)**: [`.agents/skills/qa-testing/SKILL.md`](./.agents/skills/qa-testing/SKILL.md)
    - Pirâmide de testes (Unitários, Integração, E2E), padrão AAA, mocks e checklists pré-commit.
+5. **Arquitetura de Games**: [`.agents/skills/game-architecture/SKILL.md`](./.agents/skills/game-architecture/SKILL.md)
+   - Entity Component System (ECS), Game Loop autoritativo com fixed timestep, netcode multiplayer (predição e reconciliação), particionamento espacial, Object Pooling e destruição modular de blocos/veículos.
 
 ---
 
@@ -28,3 +30,5 @@ As seguintes skills estão configuradas e prontas para uso em `.agents/skills/`:
    - `npm run lint`
    - `npm test`
    - `npm run build`
+5. **Padrão de Migrations (TypeORM)**: Toda migration deve obrigatoriamente utilizar timestamp em milissegundos (`Date.now()`, 13 dígitos) como prefixo do arquivo (`<timestamp>-<Nome>.ts`) e no nome da classe (`class <Nome><timestamp>`), garantindo compatibilidade nativa com a coluna `timestamp bigint` do TypeORM e ordem estrita de execução.
+

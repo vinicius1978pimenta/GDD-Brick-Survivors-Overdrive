@@ -102,3 +102,47 @@ src/
 2. **Variáveis de Ambiente**: Nunca deixe credenciais ou URLs fixas no código. Utilize `@nestjs/config` com validação de esquema de variáveis de ambiente.
 3. **CORS e Headers de Segurança**: Configure políticas adequadas de CORS e adicione `helmet` para proteção dos cabeçalhos HTTP.
 4. **Log Estruturado**: Utilize o `Logger` nativo do NestJS (`new Logger(MyService.name)`) para logs de informação, aviso e erro, evitando `console.log`.
+
+---
+
+## 4. Banco de Dados e Migrations (TypeORM)
+
+Para garantir integridade do esquema, rastreabilidade e consistência entre ambientes, todas as migrations devem seguir regras estritas de nomenclatura e versionamento:
+
+### 4.1 Timestamp Obrigatório em Milissegundos
+
+- **Padrão Obrigatório**: Toda migration gerada ou criada **deve obrigatoriamente utilizar o timestamp Unix em milissegundos (`Date.now()`, 13 dígitos)** como prefixo do arquivo e no sufixo do nome da classe.
+- **Formato do Arquivo**: `src/database/migrations/<timestamp_em_milissegundos>-<NomeDaMigration>.ts`
+  - *Exemplo correto*: `1728938123456-CreatePlayerTable.ts`
+  - *Incorreto*: `20261014120000-CreatePlayerTable.ts` (data formatada) ou `1728938123-CreatePlayerTable.ts` (timestamp em segundos).
+- **Formato da Classe**: `export class <NomeDaMigration><timestamp_em_milissegundos> implements MigrationInterface`
+  - *Exemplo correto*: `export class CreatePlayerTable1728938123456 implements MigrationInterface`
+- **Motivo Técnico**: A tabela de controle de migrations criada pelo TypeORM (`migrations`) define a coluna `"timestamp" bigint NOT NULL`. O TypeORM extrai o timestamp numérico de 13 dígitos para ordenar e registrar o histórico de execução. O uso de formatos manuais ou em segundos quebra a compatibilidade nativa e pode causar inconsistência na ordem de execução.
+
+### 4.2 Execução e Criação de Migrations
+
+Utilize sempre os scripts padronizados no `package.json` passando o caminho em `src/database/migrations/`:
+
+```bash
+# Gerar migration automaticamente a partir da comparação entre entidades e banco de dados:
+npm run migration:generate -- src/database/migrations/NomeDaMigration
+
+# Criar migration manual vazia:
+npm run migration:create -- src/database/migrations/NomeDaMigration
+
+# Aplicar migrations pendentes:
+npm run migration:run
+
+# Reverter a última migration aplicada:
+npm run migration:revert
+
+# Listar histórico de migrations:
+npm run migration:show
+```
+
+### 4.3 Boas Práticas de Migrations
+
+1. **Reversibilidade Garantida**: Todo método `up(queryRunner: QueryRunner)` deve possuir a contraparte exata no método `down(queryRunner: QueryRunner)` para permitir reversão limpa.
+2. **Imutabilidade**: Nunca edite uma migration que já foi executada ou commitada em branches compartilhadas. Caso precise alterar uma estrutura, crie uma nova migration corretiva.
+3. **Transações**: Utilize o `queryRunner` para garantir que alterações DDL/DML ocorram dentro de uma transação segura.
+

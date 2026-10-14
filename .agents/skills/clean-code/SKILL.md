@@ -84,4 +84,5 @@ Ao escrever ou refatorar código, certifique-se de:
 - [ ] As variáveis e métodos possuem tipagem estrita no TypeScript (sem `any` implícito ou desnecessário).
 - [ ] Não há código morto, imports não utilizados ou comentários obsoletos.
 - [ ] Cada função tem responsabilidade única e clara.
+- [ ] As migrations do banco de dados utilizam timestamp em milissegundos (`Date.now()`, 13 dígitos) no nome do arquivo e da classe.
 - [ ] Os testes unitários ou de integração cobrem os cenários principais e de erro.
