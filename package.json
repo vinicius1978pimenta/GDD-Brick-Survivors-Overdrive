@@ -1,0 +1,15 @@
+{
+  "name": "brick-survivors-overdrive",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docker:up": "docker compose up -d",
+    "docker:up:build": "docker compose up -d --build",
+    "docker:up:db": "docker compose up -d postgres",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:logs:backend": "docker compose logs -f backend",
+    "docker:logs:db": "docker compose logs -f postgres"
+  }
+}

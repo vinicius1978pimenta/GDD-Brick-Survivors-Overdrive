@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: brick_survivors_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-1978}
+      POSTGRES_DB: ${DB_DATABASE:-brick_survivors}
+    ports:
+      # Expõe a porta no host (padrão 5433 para evitar colisão caso a 5432 já esteja em uso no host)
+      - "${DB_EXTERNAL_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-brick_survivors}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - brick_network
+
+  backend:
+    container_name: brick_survivors_backend
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-1978}
+      DB_DATABASE: ${DB_DATABASE:-brick_survivors}
+      DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-false}
+      DB_SSL: ${DB_SSL:-false}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - brick_network
+
+volumes:
+  postgres_data:
+    name: brick_survivors_postgres_data
+
+networks:
+  brick_network:
+    name: brick_survivors_network
+    driver: bridge

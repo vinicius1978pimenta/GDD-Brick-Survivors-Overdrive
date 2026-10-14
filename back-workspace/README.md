@@ -57,6 +57,39 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+## Docker & Docker Compose
+
+O backend conta com suporte completo a conteineres Docker, com `Dockerfile` multi-stage (desenvolvimento e producao otimizada com usuario nao-root) e orquestracao com PostgreSQL via Docker Compose.
+
+### Subir a aplicacao completa (API + PostgreSQL)
+
+```bash
+# Subir servicos em segundo plano (PostgreSQL e NestJS)
+npm run docker:up
+
+# Ou subir e forcar a recompilacao da imagem
+npm run docker:up:build
+
+# Acompanhar logs do backend
+npm run docker:logs
+
+# Parar os servicos
+npm run docker:down
+```
+
+### Modo Desenvolvimento com Hot-Reload no Docker
+
+Para rodar com reload automatico ao alterar arquivos locais:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+### Acesso ao Banco de Dados
+
+- **Rede interna Docker (`backend` -> `postgres`)**: `DB_HOST=postgres`, porta `5432`.
+- **Acesso externo pelo host (DBeaver, pgAdmin, etc.)**: `localhost:5433` (mapeada na porta 5433 por padrao para evitar conflitos no host).
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
