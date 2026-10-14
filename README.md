@@ -1,0 +1,2 @@
+O projeto será um jogo 3D multiplayer arcade em terceira pessoa, com personagens originais inspirados em brinquedos de montar, veículos dirigíveis, armas fictícias e dois modos de jogo: sobrevivência cooperativa e combate competitivo.
+A meta é desenvolver um MVP que funcione no navegador, seja publicado gratuitamente dentro dos limites dos serviços escolhidos e demonstre suas habilidades em Angular, NestJS, TypeScript, comunicação em tempo real, arquitetura e deploy.
