@@ -5,6 +5,7 @@ import { WorldStateSnapshotDto } from '../dto/world-state-snapshot.dto.js';
 import {
   ARENA_BOUNDS,
   CITY_OBSTACLES,
+  COOP_OUTPOST_OBSTACLES,
   DEFAULT_CHARACTER_TYPE,
   HERO_COLLISION_CONFIG,
   PLAYER_CONFIG,
@@ -42,6 +43,7 @@ export type {
 export {
   ARENA_BOUNDS,
   CITY_OBSTACLES,
+  COOP_OUTPOST_OBSTACLES,
   DEFAULT_CHARACTER_TYPE,
   HERO_COLLISION_CONFIG,
   PLAYER_CONFIG,
@@ -972,11 +974,46 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
   }
 
   public resolveObstacleCollisions(
-    entity: { x: number; z: number },
+    entity: { x: number; z: number; y?: number },
     radius: number,
   ): boolean {
     let collided = false;
-    for (const obs of CITY_OBSTACLES) {
+    const isCoop = this.matchManagerService.getMode() === 'coop_survival';
+    const obstacles = isCoop ? COOP_OUTPOST_OBSTACLES : CITY_OBSTACLES;
+
+    for (const obs of obstacles) {
+      // Se a entidade estiver sobre o telhado da estrutura
+      if (
+        entity.y !== undefined &&
+        obs.roofHeight &&
+        obs.roofHeight > 1.5 &&
+        entity.y >= obs.roofHeight - 0.4
+      ) {
+        continue;
+      }
+
+      // Se estiver na rampa de subida ao telhado
+      if (obs.roofHeight && obs.roofHeight > 1.5) {
+        const roof = obs.roofHeight;
+        const rampLength = roof * 1.8;
+        const rampWidth = 2.4;
+        const posZ = (obs.minZ + obs.maxZ) / 2;
+        const rampCenterX = obs.maxX + rampWidth / 2 + 0.1;
+        const rampMinX = rampCenterX - rampWidth / 2;
+        const rampMaxX = rampCenterX + rampWidth / 2;
+        const rampMinZ = posZ - rampLength / 2;
+        const rampMaxZ = posZ + rampLength / 2;
+
+        if (
+          entity.x >= rampMinX - 0.5 &&
+          entity.x <= rampMaxX + 0.5 &&
+          entity.z >= rampMinZ - 0.5 &&
+          entity.z <= rampMaxZ + 0.5
+        ) {
+          continue;
+        }
+      }
+
       const closestX = Math.max(obs.minX, Math.min(obs.maxX, entity.x));
       const closestZ = Math.max(obs.minZ, Math.min(obs.maxZ, entity.z));
 

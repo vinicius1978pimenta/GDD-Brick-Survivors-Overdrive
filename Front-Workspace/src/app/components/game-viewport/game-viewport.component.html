@@ -135,6 +135,60 @@
     }
   </div>
 
+  <!-- Killfeed em Tempo Real (Canto Superior Direito) -->
+  <div class="killfeed-container" aria-live="polite">
+    @for (item of killfeed(); track item.id) {
+      <div class="killfeed-item" [class.killfeed-ramming]="item.reason === 'atropelamento'">
+        <span class="killfeed-killer">{{ item.killerName }}</span>
+        <iconify-icon [icon]="item.icon" class="killfeed-icon"></iconify-icon>
+        <span class="killfeed-victim">{{ item.victimName }}</span>
+      </div>
+    }
+  </div>
+
+  <!-- Painel Lateral de Jogadores Online (Pilotos da Partida) -->
+  <div class="online-players-sidebar" [class.sidebar-open]="isPlayerListOpen()">
+    <button type="button" class="btn-toggle-sidebar" (click)="togglePlayerList()" aria-label="Alternar lista de pilotos online">
+      <iconify-icon icon="mdi:account-group"></iconify-icon>
+      <span class="sidebar-btn-text">PILOTOS ({{ onlinePlayers().length }})</span>
+      <iconify-icon [icon]="isPlayerListOpen() ? 'mdi:chevron-right' : 'mdi:chevron-left'" class="chevron-icon"></iconify-icon>
+    </button>
+
+    @if (isPlayerListOpen()) {
+      <div class="sidebar-content">
+        <div class="sidebar-header">
+          <iconify-icon icon="mdi:server-network"></iconify-icon>
+          <span>SALA MULTIPLAYER</span>
+          <span class="player-count-badge">{{ onlinePlayers().length }} online</span>
+        </div>
+        <div class="player-list">
+          @for (p of onlinePlayers(); track p.id) {
+            <div class="player-list-item" [class.item-local]="p.isLocal">
+              <div class="player-avatar-badge" [attr.data-char]="p.characterType">
+                <img [src]="getCharacterAvatar(p.characterType)" class="player-avatar-img" [alt]="p.name" />
+              </div>
+              <div class="player-info-column">
+                <div class="player-name-row">
+                  <span class="p-name">{{ p.name }}</span>
+                  @if (p.isLocal) {
+                    <span class="p-you-badge">VOCÊ</span>
+                  }
+                </div>
+                <div class="player-status-row">
+                  <span class="p-mode">{{ p.isDriving ? '🚗 Pilotando' : '🏃 A Pé' }}</span>
+                  <span class="p-kills">⚔️ {{ p.kills }} kills</span>
+                </div>
+                <div class="player-hp-microbar">
+                  <div class="hp-micro-fill" [style.width.%]="(p.health / p.maxHealth) * 100"></div>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+
   <!-- Crosshair Reticle (Mira Dinâmica no Mouse) -->
   <div
     class="crosshair-container"
@@ -500,6 +554,37 @@
             @if (nameValidationError()) {
               <span class="validation-error-text">{{ nameValidationError() }}</span>
             }
+          </div>
+
+          <!-- Seleção dos 4 Personagens LEGO -->
+          <div class="character-selection-section">
+            <span class="character-selection-title">ESCOLHA SEU PERSONAGEM LEGO:</span>
+            <div class="character-grid">
+              @for (char of characterProfileList; track char.type) {
+                <div
+                  class="character-card"
+                  [class.card-selected]="selectedCharacter() === char.type"
+                  (click)="selectCharacter(char.type)"
+                  tabindex="0"
+                  role="button"
+                  [attr.aria-label]="char.name"
+                >
+                  <div class="char-avatar-container" [style.border-color]="char.primaryColor">
+                    <img [src]="char.avatarSvg" class="char-avatar-img" [alt]="char.name" />
+                  </div>
+                  <div class="char-details">
+                    <span class="char-name">{{ char.name }}</span>
+                    <span class="char-subname">{{ char.title }}</span>
+                    <p class="char-desc">{{ char.description }}</p>
+                  </div>
+                  @if (selectedCharacter() === char.type) {
+                    <div class="selected-badge">
+                      <iconify-icon icon="mdi:check-circle"></iconify-icon>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
           </div>
 
           <button type="submit" class="btn-enter-arena">

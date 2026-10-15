@@ -36,6 +36,7 @@ export function updateMovementSystem(
   isDriving: boolean,
   dt: number,
   bounds: ArenaBounds = DEFAULT_ARENA_BOUNDS,
+  groundHeight = 0,
 ): void {
   // Quando o herói está dentro do veículo, o controle a pé é suspenso
   if (isDriving) {
@@ -102,9 +103,9 @@ export function updateMovementSystem(
   const jumpForce = controller.jumpForce ?? 7.2;
   const gravity = controller.gravity ?? 18.0;
 
-  // Se estiver no chão
-  if (transform.y <= 0) {
-    transform.y = 0;
+  // Se estiver no chão / rampa / telhado
+  if (transform.y <= groundHeight) {
+    transform.y = groundHeight;
     if (velocity.vy <= 0) {
       velocity.vy = 0;
       controller.isGrounded = true;
@@ -124,9 +125,9 @@ export function updateMovementSystem(
   // Integração vertical
   transform.y += velocity.vy * dt;
 
-  // Aterrissagem no solo
-  if (transform.y <= 0) {
-    transform.y = 0;
+  // Aterrissagem no solo / rampa / telhado
+  if (transform.y <= groundHeight) {
+    transform.y = groundHeight;
     velocity.vy = 0;
     controller.isGrounded = true;
   }

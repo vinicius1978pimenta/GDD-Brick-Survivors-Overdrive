@@ -892,6 +892,82 @@ describe('GameViewportComponent', () => {
       expect(hpCard).not.toBeNull();
       expect(hpCard?.textContent).toContain('75 / 100 HP');
     });
+
+    it('deve permitir selecionar entre os 4 personagens LEGO no lobby e registrar a seleção', () => {
+      expect(component.selectedCharacter()).toBe('hobo_lego');
+      expect(component.characterProfileList.length).toBe(4);
+
+      // Seleciona Menina Caipira
+      component.selectCharacter('hillbilly_girl');
+      expect(component.selectedCharacter()).toBe('hillbilly_girl');
+
+      // Seleciona Índio Engraçado
+      component.selectCharacter('funny_indigenous');
+      expect(component.selectedCharacter()).toBe('funny_indigenous');
+
+      // Seleciona Negro de Short
+      component.selectCharacter('black_shorts');
+      expect(component.selectedCharacter()).toBe('black_shorts');
+    });
+
+    it('deve criar e sincronizar instâncias de múltiplos veículos na cena Three.js', () => {
+      const vAlpha = component.createVehicleVisualInstance('vehicle-alpha', 10, 0, 15, 0);
+      expect(vAlpha).toBeDefined();
+      expect(vAlpha.id).toBe('vehicle-alpha');
+      expect(vAlpha.wheels.length).toBe(4);
+      expect(vAlpha.mesh).toBeDefined();
+
+      const vBeta = component.createVehicleVisualInstance('vehicle-beta', -10, 0, -15, Math.PI / 2);
+      expect(vBeta).toBeDefined();
+      expect(vBeta.id).toBe('vehicle-beta');
+      expect(vBeta.wheels.length).toBe(4);
+    });
+
+    it('deve processar eventos no Killfeed com tempo de expiração e renderizar no DOM', () => {
+      component.handleKillEvent({
+        killerId: 'p1',
+        killerName: 'PilotoAlpha',
+        victimId: 'p2',
+        victimName: 'InvasorBeta',
+        reason: 'atropelamento',
+        timestamp: Date.now(),
+      });
+
+      const feed = component.killfeed();
+      expect(feed.length).toBe(1);
+      expect(feed[0].killerName).toBe('PilotoAlpha');
+      expect(feed[0].victimName).toBe('InvasorBeta');
+      expect(feed[0].reason).toBe('atropelamento');
+      expect(feed[0].icon).toBe('mdi:car-side');
+
+      fixture.detectChanges();
+      const compiled = fixture.nativeElement as HTMLElement;
+      const killItem = compiled.querySelector('.killfeed-item');
+      expect(killItem).not.toBeNull();
+      expect(killItem?.textContent).toContain('PilotoAlpha');
+      expect(killItem?.textContent).toContain('InvasorBeta');
+    });
+
+    it('deve alternar a visibilidade da lista lateral de jogadores online com togglePlayerList', () => {
+      expect(component.isPlayerListOpen()).toBe(true);
+      component.togglePlayerList();
+      expect(component.isPlayerListOpen()).toBe(false);
+      component.togglePlayerList();
+      expect(component.isPlayerListOpen()).toBe(true);
+    });
+
+    it('deve acionar restartMatch no networkService e resetar o estado da partida', () => {
+      const networkSpy = vi.spyOn(component.networkService, 'restartMatch');
+      component.isPlayerDead.set(true);
+      component.currentWave.set(5);
+
+      component.restartMatch();
+
+      expect(networkSpy).toHaveBeenCalled();
+      expect(component.isPlayerDead()).toBe(false);
+      expect(component.matchState()).toBe('waiting');
+      expect(component.currentWave()).toBe(1);
+    });
   });
 });
 

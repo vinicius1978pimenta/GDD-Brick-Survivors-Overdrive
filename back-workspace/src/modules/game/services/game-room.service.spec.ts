@@ -517,7 +517,7 @@ describe('GameRoomService', () => {
       expect(vehicle).toBeDefined();
 
       if (vehicle) {
-        vehicle.x = 55;
+        vehicle.x = ARENA_BOUNDS.maxX + 5;
         vehicle.currentSpeed = 10;
         service.stepSimulation(0.05);
 
@@ -896,8 +896,9 @@ describe('GameRoomService', () => {
     });
   });
 
-  describe('City Obstacles Collision (AABB)', () => {
-    it('should push pedestrian outside when intersecting a city obstacle', () => {
+  describe('City and Outpost Obstacles Collision (AABB)', () => {
+    it('should push pedestrian outside when intersecting a city obstacle in PvP mode', () => {
+      service.getMatchManagerService().setMode('pvp_deathmatch');
       const player = service.addPlayer('socket-obs', 'CityExplorer');
       // Place inside repair garage: minX: -20, maxX: -12, minZ: -8, maxZ: 2
       player.x = -15;
@@ -912,7 +913,8 @@ describe('GameRoomService', () => {
       expect(insideX && insideZ).toBe(false);
     });
 
-    it('should push vehicle outside and dampen speed when vehicle collides with obstacle', () => {
+    it('should push vehicle outside and dampen speed when vehicle collides with obstacle in PvP mode', () => {
+      service.getMatchManagerService().setMode('pvp_deathmatch');
       const vehicle = service.getVehicle('vehicle-alpha')!;
       // Place inside gas station: minX: 12, maxX: 20, minZ: -8, maxZ: 2
       vehicle.x = 15;
@@ -925,6 +927,35 @@ describe('GameRoomService', () => {
       const insideX = vehicle.x >= 12 && vehicle.x <= 20;
       const insideZ = vehicle.z >= -8 && vehicle.z <= 2;
       expect(insideX && insideZ).toBe(false);
+    });
+
+    it('should push pedestrian outside when intersecting an outpost obstacle in Co-op mode', () => {
+      service.getMatchManagerService().setMode('coop_survival');
+      const player = service.addPlayer('socket-coop-obs', 'OutpostExplorer');
+      // Place inside container 1: minX: -18, maxX: -14, minZ: -21, maxZ: -15
+      player.x = -16;
+      player.z = -18;
+
+      const hit = service.resolveObstacleCollisions(player, HERO_COLLISION_CONFIG.radius);
+
+      expect(hit).toBe(true);
+      const insideX = player.x >= -18 && player.x <= -14;
+      const insideZ = player.z >= -21 && player.z <= -15;
+      expect(insideX && insideZ).toBe(false);
+    });
+
+    it('should not push pedestrian if they are on top of the rooftop', () => {
+      service.getMatchManagerService().setMode('pvp_deathmatch');
+      const player = service.addPlayer('socket-roof', 'RoofSniper');
+      // Prédio Central Norte: minX: -10, maxX: 10, minZ: -55, maxZ: -38, roofHeight: 7.2
+      player.x = 0;
+      player.z = -46;
+      player.y = 7.2;
+
+      const hit = service.resolveObstacleCollisions(player, HERO_COLLISION_CONFIG.radius);
+      expect(hit).toBe(false);
+      expect(player.x).toBe(0);
+      expect(player.z).toBe(-46);
     });
   });
 

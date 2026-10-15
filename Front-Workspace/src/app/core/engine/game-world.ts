@@ -165,6 +165,12 @@ export class GameWorld {
   /** Gancho opcional disparado antes de cada passo da simulação determinística de 60Hz */
   public onBeforeFixedUpdate?: (dt: number) => void;
 
+  /** Gancho opcional disparado após cada passo da simulação determinística de 60Hz */
+  public onAfterFixedUpdate?: (dt: number) => void;
+
+  /** Provedor opcional de altura do terreno/rampas/telhados em coordenadas (x, z) */
+  public terrainHeightProvider?: (x: number, z: number) => number;
+
   constructor(bounds: ArenaBounds = DEFAULT_ARENA_BOUNDS) {
     this.bounds = bounds;
     this.gameLoop = new GameLoop((dt) => this.fixedUpdate(dt));
@@ -190,6 +196,9 @@ export class GameWorld {
     );
 
     const isDriving = this.isDriving();
+    const groundHeight = this.terrainHeightProvider
+      ? this.terrainHeightProvider(this.heroTransform.x, this.heroTransform.z)
+      : 0;
 
     // 2. Sistema de Movimentação Pedestre
     updateMovementSystem(
@@ -200,6 +209,7 @@ export class GameWorld {
       isDriving,
       dt,
       this.bounds,
+      groundHeight,
     );
 
     // Colisão sólida contra a lataria do veículo quando o herói estiver a pé
@@ -334,6 +344,10 @@ export class GameWorld {
       this.heroTransform.y = this.vehicleTransform.y + 0.35;
       this.heroTransform.z = this.vehicleTransform.z;
       this.heroTransform.rotationY = this.vehicleTransform.rotationY;
+    }
+
+    if (this.onAfterFixedUpdate) {
+      this.onAfterFixedUpdate(dt);
     }
   }
 

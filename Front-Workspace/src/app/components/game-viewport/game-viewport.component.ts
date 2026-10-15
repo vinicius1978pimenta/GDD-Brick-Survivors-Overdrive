@@ -41,9 +41,14 @@ import {
   CharacterProfile,
   CharacterType,
   CHARACTER_PROFILES,
+  getCharacterAvatar,
 } from '../../core/engine/types/character.types';
 import { CharacterMeshFactory } from './character-mesh.factory';
-import { CITY_OBSTACLES } from '../../core/engine/types/ecs.types';
+import {
+  CITY_OBSTACLES,
+  COOP_OUTPOST_OBSTACLES,
+  getTerrainHeightAt,
+} from '../../core/engine/types/ecs.types';
 import {
   EnemyEntity,
   EnemyType,
@@ -120,6 +125,7 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
   public readonly selectedCharacter = signal<CharacterType>('hobo_lego');
   public readonly localCharacterType = signal<CharacterType>('hobo_lego');
   public readonly characterProfiles = CHARACTER_PROFILES;
+  public readonly characterProfileList = Object.values(CHARACTER_PROFILES);
   public readonly characterTypeList: CharacterType[] = [
     'hobo_lego',
     'hillbilly_girl',
@@ -134,6 +140,8 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Múltiplos Veículos Sincronizados
   public readonly worldVehicles = new Map<string, VehicleVisual>();
+  public localDrivingVehicleId = 'vehicle-alpha';
+  public readonly getCharacterAvatar = getCharacterAvatar;
   private unsubscribeKillEvents: (() => void) | null = null;
 
   // Barra de Vida (HP do Piloto e Overhead Tags Flutuantes)
@@ -256,34 +264,6 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Sincroniza envio de input estritamente com o fixed timestep determinístico de 60Hz
     this.world.onBeforeFixedUpdate = (dt) => {
-      // Bloqueio físico de atravessamento de prédios (AABB) e acesso aos telhados
-      const hero = this.world.heroTransform;
-      for (const obs of CITY_OBSTACLES) {
-        const roof = obs.roofHeight ?? 6.0;
-        const padding = 0.6;
-        if (
-          hero.x >= obs.minX - padding &&
-          hero.x <= obs.maxX + padding &&
-          hero.z >= obs.minZ - padding &&
-          hero.z <= obs.maxZ + padding
-        ) {
-          if (hero.y >= roof - 0.4) {
-            hero.y = Math.max(hero.y, roof);
-          } else {
-            const dxMin = Math.abs(hero.x - (obs.minX - padding));
-            const dxMax = Math.abs(hero.x - (obs.maxX + padding));
-            const dzMin = Math.abs(hero.z - (obs.minZ - padding));
-            const dzMax = Math.abs(hero.z - (obs.maxZ + padding));
-            const minDiff = Math.min(dxMin, dxMax, dzMin, dzMax);
-
-            if (minDiff === dxMin) hero.x = obs.minX - padding;
-            else if (minDiff === dxMax) hero.x = obs.maxX + padding;
-            else if (minDiff === dzMin) hero.z = obs.minZ - padding;
-            else hero.z = obs.maxZ + padding;
-          }
-        }
-      }
-
       const currentRotationY = this.world.isDriving()
         ? this.world.vehicleTransform.rotationY
         : this.world.heroTransform.rotationY;
@@ -302,6 +282,16 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
         });
         this.world.enqueuePendingInput(seq, this.world.inputState, dt, currentRotationY);
       }
+    };
+
+    // Provedor de altura do terreno/rampas/telhados determinístico para o modo ativo
+    this.world.terrainHeightProvider = (x, z) => {
+      return getTerrainHeightAt(x, z, this.gameMode()).height;
+    };
+
+    // Bloqueio físico determinístico e colisão sólida pós-movimento (pedestres e veículos)
+    this.world.onAfterFixedUpdate = (_dt) => {
+      this.resolveSolidObstacleCollisions();
     };
 
     this.startGameLoop();
@@ -337,6 +327,81 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
     window.setTimeout(() => {
       this.killfeed.update((feed) => feed.filter((f) => f.id !== item.id));
     }, 5000);
+  }
+
+  /**
+   * Bloqueio físico determinístico e colisão sólida AABB contra prédios, casas e rampas.
+   * Suporta PvP (CITY_OBSTACLES) e Co-op (COOP_OUTPOST_OBSTACLES), permitindo subir nos telhados via rampas.
+   */
+  public resolveSolidObstacleCollisions(): void {
+    const isDriving = this.world.isDriving();
+    const hero = this.world.heroTransform;
+    const vehicle = this.world.vehicleTransform;
+    const obstacles = this.gameMode() === 'coop_survival' ? COOP_OUTPOST_OBSTACLES : CITY_OBSTACLES;
+
+    for (const obs of obstacles) {
+      const roof = obs.roofHeight ?? 5.5;
+
+      // 1. Rampa de subida ao telhado (apenas para o herói a pé em estruturas com telhado)
+      if (!isDriving && obs.roofHeight && obs.roofHeight > 1.5) {
+        const rampLength = roof * 1.8;
+        const rampWidth = 2.4;
+        const posZ = (obs.minZ + obs.maxZ) / 2;
+        const rampCenterX = obs.maxX + rampWidth / 2 + 0.1;
+        const rampMinX = rampCenterX - rampWidth / 2;
+        const rampMaxX = rampCenterX + rampWidth / 2;
+        const rampMinZ = posZ - rampLength / 2;
+        const rampMaxZ = posZ + rampLength / 2;
+
+        if (
+          hero.x >= rampMinX - 0.5 &&
+          hero.x <= rampMaxX + 0.5 &&
+          hero.z >= rampMinZ - 0.5 &&
+          hero.z <= rampMaxZ + 0.5
+        ) {
+          // O herói está na rampa: sua sustentação vertical é garantida pelo MovementSystem (terrainHeightProvider)
+          continue;
+        }
+      }
+
+      // 2. Colisão sólida com as paredes externas dos prédios e contêineres
+      const target = isDriving ? vehicle : hero;
+      const radius = isDriving ? 1.6 : 0.6;
+
+      if (
+        target.x >= obs.minX - radius &&
+        target.x <= obs.maxX + radius &&
+        target.z >= obs.minZ - radius &&
+        target.z <= obs.maxZ + radius
+      ) {
+        // Se estiver sobre o telhado da estrutura
+        if (!isDriving && obs.roofHeight && obs.roofHeight > 1.5 && target.y >= roof - 0.4) {
+          target.y = Math.max(target.y, roof);
+          this.world.heroVelocity.vy = Math.max(0, this.world.heroVelocity.vy);
+          this.world.heroController.isGrounded = true;
+          continue;
+        }
+
+        // Push-out para a face externa mais próxima
+        const dxMin = Math.abs(target.x - (obs.minX - radius));
+        const dxMax = Math.abs(target.x - (obs.maxX + radius));
+        const dzMin = Math.abs(target.z - (obs.minZ - radius));
+        const dzMax = Math.abs(target.z - (obs.maxZ + radius));
+        const minDiff = Math.min(dxMin, dxMax, dzMin, dzMax);
+
+        if (minDiff === dxMin) target.x = obs.minX - radius;
+        else if (minDiff === dxMax) target.x = obs.maxX + radius;
+        else if (minDiff === dzMin) target.z = obs.minZ - radius;
+        else target.z = obs.maxZ + radius;
+
+        // Se estiver dirigindo, amortece velocidade e zera drift
+        if (isDriving) {
+          this.world.vehicleComponent.currentSpeed *= -0.2;
+          this.world.vehicleComponent.driftVelocityX = 0;
+          this.world.vehicleComponent.driftVelocityZ = 0;
+        }
+      }
+    }
   }
 
   public onPilotNameChange(event: Event): void {
@@ -511,13 +576,13 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.scene.add(this.dirLight);
 
-    // Sistema de Ciclo Dinâmico Dia e Noite
+    // Sistema de Ciclo Dinâmico Dia e Noite (360s = 6 minutos)
     this.dayNightSystem = new DayNightSystem(
       this.scene,
       this.dirLight,
       this.ambientLight,
       this.hemiLight,
-      90,
+      360,
     );
   }
 
@@ -552,7 +617,8 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
       const ctx = canvas.getContext('2d');
       if (!ctx) return null;
 
-      ctx.fillStyle = '#1e293b';
+      // Fundo claro e clean para preservar a luminosidade e cor real dos pisos (grama LEGO verde clara e asfalto cinza claro)
+      ctx.fillStyle = '#f8fafc';
       ctx.fillRect(0, 0, 256, 256);
 
       const tileSize = 64;
@@ -563,26 +629,26 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
           const cx = x * tileSize + tileSize / 2;
           const cy = y * tileSize + tileSize / 2;
 
-          ctx.strokeStyle = '#0f172a';
-          ctx.lineWidth = 2;
+          ctx.strokeStyle = '#e2e8f0';
+          ctx.lineWidth = 1.5;
           ctx.strokeRect(x * tileSize, y * tileSize, tileSize, tileSize);
 
           ctx.beginPath();
           ctx.arc(cx, cy + 2, radius, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.06)';
           ctx.fill();
 
           const grad = ctx.createRadialGradient(cx - 5, cy - 5, 2, cx, cy, radius);
-          grad.addColorStop(0, '#475569');
-          grad.addColorStop(0.8, '#334155');
-          grad.addColorStop(1, '#1e293b');
+          grad.addColorStop(0, '#ffffff');
+          grad.addColorStop(0.8, '#f1f5f9');
+          grad.addColorStop(1, '#cbd5e1');
 
           ctx.beginPath();
           ctx.arc(cx, cy, radius, 0, Math.PI * 2);
           ctx.fillStyle = grad;
           ctx.fill();
 
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
           ctx.lineWidth = 1.5;
           ctx.stroke();
         }
@@ -882,97 +948,16 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
   /**
    * Cria uma malha 3D de herói de blocos para representar jogadores remotos (Multiplayer).
    */
-  public createRemoteHeroMesh(colorHex = 0x10b981): THREE.Group {
-    const group = new THREE.Group();
-
-    const headMat = new THREE.MeshStandardMaterial({ color: 0xfcd116, roughness: 0.35, metalness: 0.05 });
-    const torsoMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3, metalness: 0.1 });
-    const hipsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.4, metalness: 0.1 });
-    const legsMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.35, metalness: 0.1 });
-    const visorMat = new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
-      roughness: 0.15,
-      metalness: 0.8,
-      emissive: 0x0284c7,
-      emissiveIntensity: 0.6,
-    });
-
-    const legGeo = new THREE.BoxGeometry(0.38, 0.9, 0.45);
-
-    // 1. Pivô da perna esquerda
-    const leftLegPivot = new THREE.Group();
-    leftLegPivot.position.set(-0.25, 0.9, 0);
-    const leftLeg = new THREE.Mesh(legGeo, legsMat);
-    leftLeg.position.set(0, -0.45, 0);
-    leftLeg.castShadow = true;
-    leftLegPivot.add(leftLeg);
-    group.add(leftLegPivot);
-
-    // 2. Pivô da perna direita
-    const rightLegPivot = new THREE.Group();
-    rightLegPivot.position.set(0.25, 0.9, 0);
-    const rightLeg = new THREE.Mesh(legGeo, legsMat);
-    rightLeg.position.set(0, -0.45, 0);
-    rightLeg.castShadow = true;
-    rightLegPivot.add(rightLeg);
-    group.add(rightLegPivot);
-
-    const hipsGeo = new THREE.BoxGeometry(0.92, 0.25, 0.5);
-    const hips = new THREE.Mesh(hipsGeo, hipsMat);
-    hips.position.set(0, 0.98, 0);
-    hips.castShadow = true;
-    group.add(hips);
-
-    const torsoGeo = new THREE.BoxGeometry(1.0, 1.1, 0.6);
-    const torso = new THREE.Mesh(torsoGeo, torsoMat);
-    torso.position.set(0, 1.65, 0);
-    torso.castShadow = true;
-    group.add(torso);
-
-    const headGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.6, 20);
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.set(0, 2.45, 0);
-    head.castShadow = true;
-    group.add(head);
-
-    const studGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.16, 16);
-    const headStud = new THREE.Mesh(studGeo, headMat);
-    headStud.position.set(0, 2.82, 0);
-    headStud.castShadow = true;
-    group.add(headStud);
-
-    const visorGeo = new THREE.BoxGeometry(0.5, 0.16, 0.16);
-    const visor = new THREE.Mesh(visorGeo, visorMat);
-    visor.position.set(0, 2.48, 0.32);
-    group.add(visor);
-
-    const armGeo = new THREE.BoxGeometry(0.26, 0.85, 0.3);
-
-    // 3. Pivô do braço esquerdo
-    const leftArmPivot = new THREE.Group();
-    leftArmPivot.position.set(-0.68, 2.05, 0);
-    const leftArm = new THREE.Mesh(armGeo, torsoMat);
-    leftArm.position.set(0, -0.4, 0);
-    leftArm.castShadow = true;
-    leftArmPivot.add(leftArm);
-    group.add(leftArmPivot);
-
-    // 4. Pivô do braço direito
-    const rightArmPivot = new THREE.Group();
-    rightArmPivot.position.set(0.68, 2.05, 0);
-    const rightArm = new THREE.Mesh(armGeo, torsoMat);
-    rightArm.position.set(0, -0.4, 0);
-    rightArm.castShadow = true;
-    rightArmPivot.add(rightArm);
-    group.add(rightArmPivot);
-
+  public createRemoteHeroMesh(characterType?: CharacterType, colorHex = 0x10b981): THREE.Group {
+    const charResult = CharacterMeshFactory.createCharacterMesh(characterType || 'hobo_lego', false);
+    const group = charResult.group;
     group.userData = {
-      leftLegPivot,
-      rightLegPivot,
-      leftArmPivot,
-      rightArmPivot,
+      leftLegPivot: charResult.leftLegPivot,
+      rightLegPivot: charResult.rightLegPivot,
+      leftArmPivot: charResult.leftArmPivot,
+      rightArmPivot: charResult.rightArmPivot,
+      characterType: characterType || 'hobo_lego',
     };
-
     return group;
   }
 
@@ -1010,24 +995,31 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
           this.world.heroMaxHealth = player.maxHealth;
           this.pilotMaxHealth.set(player.maxHealth);
         }
+        if (player.vehicleId) {
+          this.localDrivingVehicleId = player.vehicleId;
+        }
         continue;
       }
 
       currentRemoteIds.add(player.id);
       let visual = this.remotePlayerVisuals.get(player.id);
+      const charType: CharacterType = player.characterType || 'hobo_lego';
 
       if (!visual && this.scene) {
-        const mesh = this.createRemoteHeroMesh();
+        const mesh = this.createRemoteHeroMesh(charType);
         mesh.position.set(player.x, player.y, player.z);
         mesh.rotation.y = player.rotationY;
         this.scene.add(mesh);
 
         visual = {
           mesh,
+          characterType: charType,
           leftLegPivot: mesh.userData['leftLegPivot'],
           rightLegPivot: mesh.userData['rightLegPivot'],
           leftArmPivot: mesh.userData['leftArmPivot'],
           rightArmPivot: mesh.userData['rightArmPivot'],
+          isDriving: !!player.isDriving,
+          vehicleId: player.vehicleId,
           currentX: player.x,
           currentY: player.y,
           currentZ: player.z,
@@ -1046,9 +1038,31 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
         visual.targetY = player.y;
         visual.targetZ = player.z;
         visual.targetRotationY = player.rotationY;
+        visual.isDriving = !!player.isDriving;
+        visual.vehicleId = player.vehicleId;
         if (player.name) visual.name = player.name;
         if (typeof player.health === 'number') visual.health = player.health;
         if (typeof player.maxHealth === 'number') visual.maxHealth = player.maxHealth;
+
+        // Se o tipo de personagem do jogador mudou, substitui a malha
+        if (player.characterType && visual.characterType !== player.characterType) {
+          if (this.scene) {
+            this.scene.remove(visual.mesh);
+          }
+          this.disposeObject3D(visual.mesh);
+          const newMesh = this.createRemoteHeroMesh(player.characterType);
+          newMesh.position.set(visual.currentX, visual.currentY, visual.currentZ);
+          newMesh.rotation.y = visual.currentRotationY;
+          if (this.scene) {
+            this.scene.add(newMesh);
+          }
+          visual.mesh = newMesh;
+          visual.characterType = player.characterType;
+          visual.leftLegPivot = newMesh.userData['leftLegPivot'];
+          visual.rightLegPivot = newMesh.userData['rightLegPivot'];
+          visual.leftArmPivot = newMesh.userData['leftArmPivot'];
+          visual.rightArmPivot = newMesh.userData['rightArmPivot'];
+        }
       }
     }
 
@@ -1060,6 +1074,36 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
         }
         this.disposeObject3D(visual.mesh);
         this.remotePlayerVisuals.delete(id);
+      }
+    }
+
+    // Sincronização dos múltiplos veículos da arena (alpha, beta, gamma, delta)
+    if (snapshot.vehicles && snapshot.vehicles.length > 0) {
+      const currentVehicleIds = new Set<string>();
+      for (const v of snapshot.vehicles) {
+        currentVehicleIds.add(v.id);
+        let vVisual = this.worldVehicles.get(v.id);
+        if (!vVisual && this.scene) {
+          vVisual = this.createVehicleVisualInstance(v.id, v.x, v.y, v.z, v.rotationY);
+          this.worldVehicles.set(v.id, vVisual);
+        } else if (vVisual) {
+          vVisual.targetX = v.x;
+          vVisual.targetY = v.y;
+          vVisual.targetZ = v.z;
+          vVisual.targetRotationY = v.rotationY;
+          vVisual.speed = v.speed;
+          vVisual.driverId = v.driverId;
+        }
+      }
+
+      for (const [vId, vVisual] of this.worldVehicles.entries()) {
+        if (!currentVehicleIds.has(vId)) {
+          if (this.scene) {
+            this.scene.remove(vVisual.mesh);
+          }
+          this.disposeObject3D(vVisual.mesh);
+          this.worldVehicles.delete(vId);
+        }
       }
     }
   }
@@ -1124,10 +1168,23 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
+   * Alterna a visibilidade da lista lateral de jogadores online.
+   */
+  public togglePlayerList(): void {
+    this.isPlayerListOpen.update((open) => !open);
+  }
+
+  /**
    * Reinicia a partida para jogar novamente após vitória ou derrota.
    */
   public restartMatch(): void {
+    this.networkService.restartMatch();
     this.world.resetMatch();
+    this.world.heroHealth = 100;
+    this.pilotHealth.set(100);
+    this.world.heroTransform.x = 0;
+    this.world.heroTransform.y = 0;
+    this.world.heroTransform.z = 0;
     this.matchState.set('waiting');
     this.isPlayerReady.set(false);
     this.isPlayerDead.set(false);
@@ -1135,6 +1192,173 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
     this.currentWave.set(1);
     this.enemiesRemaining.set(0);
     this.upgradeOptions.set([]);
+  }
+
+  /**
+   * Cria uma instância visual de veículo arcade de blocos para a sincronização multiplayer.
+   */
+  public createVehicleVisualInstance(
+    id: string,
+    x: number,
+    y: number,
+    z: number,
+    rotationY: number,
+  ): VehicleVisual {
+    const group = new THREE.Group();
+    const wheels: THREE.Mesh[] = [];
+
+    // Determina a paleta visual do veículo conforme o ID do servidor
+    let bodyColor = 0xfcd116; // Amarelo clássico (alpha)
+    if (id.includes('beta')) bodyColor = 0x0284c7; // Azul elétrico (beta)
+    else if (id.includes('gamma')) bodyColor = 0xef4444; // Vermelho escarlate (gamma)
+    else if (id.includes('delta')) bodyColor = 0x10b981; // Verde esmeralda (delta)
+
+    const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.3, metalness: 0.1 });
+    const chassisMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.5, metalness: 0.2 });
+    const rollCageMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.6 });
+    const tireMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.8, metalness: 0.05 });
+    const hubcapMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.3, metalness: 0.2 });
+    const seatMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6, metalness: 0.1 });
+    const headlightMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 0xfef08a,
+      emissiveIntensity: 0.9,
+    });
+    const taillightMat = new THREE.MeshStandardMaterial({
+      color: 0xef4444,
+      emissive: 0xef4444,
+      emissiveIntensity: 0.8,
+    });
+
+    // 1. Chassi Inferior
+    const chassisGeo = new THREE.BoxGeometry(1.9, 0.35, 3.4);
+    const chassis = new THREE.Mesh(chassisGeo, chassisMat);
+    chassis.position.set(0, 0.4, 0);
+    chassis.castShadow = true;
+    chassis.receiveShadow = true;
+    group.add(chassis);
+
+    // 2. Carroceria Frontal
+    const bodyFrontGeo = new THREE.BoxGeometry(1.6, 0.45, 1.4);
+    const bodyFront = new THREE.Mesh(bodyFrontGeo, bodyMat);
+    bodyFront.position.set(0, 0.72, 0.9);
+    bodyFront.castShadow = true;
+    bodyFront.receiveShadow = true;
+    group.add(bodyFront);
+
+    // Bordo / Cockpit
+    const bodyCockpitGeo = new THREE.BoxGeometry(1.6, 0.3, 1.2);
+    const bodyCockpit = new THREE.Mesh(bodyCockpitGeo, bodyMat);
+    bodyCockpit.position.set(0, 0.65, -0.4);
+    bodyCockpit.castShadow = true;
+    group.add(bodyCockpit);
+
+    // 3. Banco do Piloto
+    const seatGeo = new THREE.BoxGeometry(0.8, 0.6, 0.7);
+    const seat = new THREE.Mesh(seatGeo, seatMat);
+    seat.position.set(0, 0.85, -0.3);
+    seat.castShadow = true;
+    group.add(seat);
+
+    // Volante
+    const wheelColumnGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.4, 8);
+    const wheelColumn = new THREE.Mesh(wheelColumnGeo, chassisMat);
+    wheelColumn.position.set(0, 0.9, 0.3);
+    wheelColumn.rotation.x = -Math.PI / 4;
+    group.add(wheelColumn);
+
+    const steeringGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.05, 12);
+    const steering = new THREE.Mesh(steeringGeo, hubcapMat);
+    steering.position.set(0, 1.05, 0.16);
+    steering.rotation.x = -Math.PI / 4;
+    group.add(steering);
+
+    // 4. Santantônio Tubular
+    const cageBarGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.1, 10);
+    const cageLeft = new THREE.Mesh(cageBarGeo, rollCageMat);
+    cageLeft.position.set(-0.75, 1.25, -0.3);
+    cageLeft.castShadow = true;
+    group.add(cageLeft);
+
+    const cageRight = new THREE.Mesh(cageBarGeo, rollCageMat);
+    cageRight.position.set(0.75, 1.25, -0.3);
+    cageRight.castShadow = true;
+    group.add(cageRight);
+
+    const cageTopGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.6, 10);
+    const cageTop = new THREE.Mesh(cageTopGeo, rollCageMat);
+    cageTop.position.set(0, 1.8, -0.3);
+    cageTop.rotation.z = Math.PI / 2;
+    cageTop.castShadow = true;
+    group.add(cageTop);
+
+    // 5. Faróis Frontais e Lanternas Traseiras
+    const lightGeo = new THREE.BoxGeometry(0.3, 0.2, 0.12);
+    const leftHeadlight = new THREE.Mesh(lightGeo, headlightMat);
+    leftHeadlight.position.set(-0.6, 0.75, 1.62);
+    group.add(leftHeadlight);
+
+    const rightHeadlight = new THREE.Mesh(lightGeo, headlightMat);
+    rightHeadlight.position.set(0.6, 0.75, 1.62);
+    group.add(rightHeadlight);
+
+    const leftTaillight = new THREE.Mesh(lightGeo, taillightMat);
+    leftTaillight.position.set(-0.6, 0.65, -1.72);
+    group.add(leftTaillight);
+
+    const rightTaillight = new THREE.Mesh(lightGeo, taillightMat);
+    rightTaillight.position.set(0.6, 0.65, -1.72);
+    group.add(rightTaillight);
+
+    // 6. Rodas Volumosas com Calotas
+    const tireRadius = 0.52;
+    const tireWidth = 0.44;
+    const tireGeo = new THREE.CylinderGeometry(tireRadius, tireRadius, tireWidth, 20);
+    const hubcapGeo = new THREE.CylinderGeometry(0.24, 0.24, tireWidth + 0.02, 16);
+
+    const wheelPositions = [
+      { x: -1.15, y: tireRadius, z: 1.15 },
+      { x: 1.15, y: tireRadius, z: 1.15 },
+      { x: -1.15, y: tireRadius, z: -1.15 },
+      { x: 1.15, y: tireRadius, z: -1.15 },
+    ];
+
+    for (const pos of wheelPositions) {
+      const wheelHolder = new THREE.Mesh(tireGeo, tireMat);
+      wheelHolder.position.set(pos.x, pos.y, pos.z);
+      wheelHolder.rotation.z = Math.PI / 2;
+      wheelHolder.castShadow = true;
+      wheelHolder.receiveShadow = true;
+
+      const hubcap = new THREE.Mesh(hubcapGeo, hubcapMat);
+      wheelHolder.add(hubcap);
+
+      wheels.push(wheelHolder);
+      group.add(wheelHolder);
+    }
+
+    group.position.set(x, y, z);
+    group.rotation.y = rotationY;
+
+    if (this.scene) {
+      this.scene.add(group);
+    }
+
+    return {
+      id,
+      mesh: group,
+      wheels,
+      currentX: x,
+      currentY: y,
+      currentZ: z,
+      currentRotationY: rotationY,
+      targetX: x,
+      targetY: y,
+      targetZ: z,
+      targetRotationY: rotationY,
+      speed: 0,
+      driverId: null,
+    };
   }
 
   /**
@@ -1478,195 +1702,34 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Cria o modelo 3D do Veículo (Buggy Arcade de Blocos).
-   * Chassi amarelo/preto, 4 rodas volumosas em cilindros pretos com calotas, santantônio e bancos.
+   * Inicializa os 4 veículos de blocos da arena LEGO (alpha, beta, gamma, delta).
    */
-  private createBlockBuggy(): void {
+  public initArenaVehicles(): void {
     if (!this.scene) return;
 
-    this.vehicleGroup = new THREE.Group();
-    this.wheelMeshes = [];
-
-    const bodyMatYellow = new THREE.MeshStandardMaterial({ color: 0xfcd116, roughness: 0.3, metalness: 0.1 });
-    const chassisMatBlack = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.5, metalness: 0.2 });
-    const rollCageMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.6 });
-    const tireMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.8, metalness: 0.05 });
-    const hubcapMat = new THREE.MeshStandardMaterial({ color: 0xe52521, roughness: 0.3, metalness: 0.2 });
-    const seatMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6, metalness: 0.1 });
-    const headlightMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      emissive: 0xfef08a,
-      emissiveIntensity: 0.9,
-    });
-    const taillightMat = new THREE.MeshStandardMaterial({
-      color: 0xef4444,
-      emissive: 0xef4444,
-      emissiveIntensity: 0.8,
-    });
-
-    // 1. Chassi Inferior
-    const chassisGeo = new THREE.BoxGeometry(1.9, 0.35, 3.4);
-    const chassis = new THREE.Mesh(chassisGeo, chassisMatBlack);
-    chassis.position.set(0, 0.4, 0);
-    chassis.castShadow = true;
-    chassis.receiveShadow = true;
-    this.vehicleGroup.add(chassis);
-
-    // 2. Carroceria Principal Amarela de Blocos
-    const bodyFrontGeo = new THREE.BoxGeometry(1.6, 0.45, 1.4);
-    const bodyFront = new THREE.Mesh(bodyFrontGeo, bodyMatYellow);
-    bodyFront.position.set(0, 0.72, 0.9);
-    bodyFront.castShadow = true;
-    bodyFront.receiveShadow = true;
-    this.vehicleGroup.add(bodyFront);
-
-    // Bordo / Painel do Cockpit
-    const bodyCockpitGeo = new THREE.BoxGeometry(1.6, 0.3, 1.2);
-    const bodyCockpit = new THREE.Mesh(bodyCockpitGeo, bodyMatYellow);
-    bodyCockpit.position.set(0, 0.65, -0.4);
-    bodyCockpit.castShadow = true;
-    this.vehicleGroup.add(bodyCockpit);
-
-    // 3. Cockpit e Banco do Piloto
-    const seatGeo = new THREE.BoxGeometry(0.8, 0.6, 0.7);
-    const seat = new THREE.Mesh(seatGeo, seatMat);
-    seat.position.set(0, 0.85, -0.3);
-    seat.castShadow = true;
-    this.vehicleGroup.add(seat);
-
-    // Volante de Blocos
-    const wheelColumnGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.4, 8);
-    const wheelColumn = new THREE.Mesh(wheelColumnGeo, chassisMatBlack);
-    wheelColumn.position.set(0, 0.9, 0.3);
-    wheelColumn.rotation.x = -Math.PI / 4;
-    this.vehicleGroup.add(wheelColumn);
-
-    const steeringGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.05, 12);
-    const steering = new THREE.Mesh(steeringGeo, hubcapMat);
-    steering.position.set(0, 1.05, 0.16);
-    steering.rotation.x = -Math.PI / 4;
-    this.vehicleGroup.add(steering);
-
-    // 4. Santantônio (Roll Cage) Tubular
-    const cageBarGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.1, 10);
-
-    const cageLeft = new THREE.Mesh(cageBarGeo, rollCageMat);
-    cageLeft.position.set(-0.75, 1.25, -0.3);
-    cageLeft.castShadow = true;
-    this.vehicleGroup.add(cageLeft);
-
-    const cageRight = new THREE.Mesh(cageBarGeo, rollCageMat);
-    cageRight.position.set(0.75, 1.25, -0.3);
-    cageRight.castShadow = true;
-    this.vehicleGroup.add(cageRight);
-
-    const cageTopGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.6, 10);
-    const cageTop = new THREE.Mesh(cageTopGeo, rollCageMat);
-    cageTop.position.set(0, 1.8, -0.3);
-    cageTop.rotation.z = Math.PI / 2;
-    cageTop.castShadow = true;
-    this.vehicleGroup.add(cageTop);
-
-    // 5. Faróis Dianteiros e Lanternas Traseiras
-    const lightGeo = new THREE.BoxGeometry(0.3, 0.2, 0.12);
-    const leftHeadlight = new THREE.Mesh(lightGeo, headlightMat);
-    leftHeadlight.position.set(-0.6, 0.75, 1.62);
-    this.vehicleGroup.add(leftHeadlight);
-
-    const rightHeadlight = new THREE.Mesh(lightGeo, headlightMat);
-    rightHeadlight.position.set(0.6, 0.75, 1.62);
-    this.vehicleGroup.add(rightHeadlight);
-
-    // Focos de luz frontais SpotLight para iluminação noturna
-    const leftSpot = new THREE.SpotLight(0xfffbeb, 2.8, 35, Math.PI / 6, 0.4);
-    leftSpot.position.set(-0.6, 0.75, 1.7);
-    leftSpot.target.position.set(-0.6, 0.2, 14.0);
-    leftSpot.visible = false;
-    this.vehicleGroup.add(leftSpot);
-    this.vehicleGroup.add(leftSpot.target);
-
-    const rightSpot = new THREE.SpotLight(0xfffbeb, 2.8, 35, Math.PI / 6, 0.4);
-    rightSpot.position.set(0.6, 0.75, 1.7);
-    rightSpot.target.position.set(0.6, 0.2, 14.0);
-    rightSpot.visible = false;
-    this.vehicleGroup.add(rightSpot);
-    this.vehicleGroup.add(rightSpot.target);
-
-    if (this.dayNightSystem) {
-      this.dayNightSystem.vehicleHeadlights = [leftSpot, rightSpot];
-      this.dayNightSystem.vehicleHeadlightMaterial = headlightMat;
-    }
-
-    const leftTaillight = new THREE.Mesh(lightGeo, taillightMat);
-    leftTaillight.position.set(-0.6, 0.65, -1.72);
-    this.vehicleGroup.add(leftTaillight);
-
-    const rightTaillight = new THREE.Mesh(lightGeo, taillightMat);
-    rightTaillight.position.set(0.6, 0.65, -1.72);
-    this.vehicleGroup.add(rightTaillight);
-
-    // 6. Quatro Rodas Volumosas com Calotas em Cilindros Pretos
-    const tireRadius = 0.52;
-    const tireWidth = 0.44;
-    const tireGeo = new THREE.CylinderGeometry(tireRadius, tireRadius, tireWidth, 20);
-    const hubcapGeo = new THREE.CylinderGeometry(0.24, 0.24, tireWidth + 0.02, 16);
-
-    const wheelPositions = [
-      { x: -1.15, y: tireRadius, z: 1.15 },  // Dianteira Esquerda
-      { x: 1.15, y: tireRadius, z: 1.15 },   // Dianteira Direita
-      { x: -1.15, y: tireRadius, z: -1.15 }, // Traseira Esquerda
-      { x: 1.15, y: tireRadius, z: -1.15 },  // Traseira Direita
+    const defaultVehicles = [
+      { id: 'vehicle-alpha', x: 0, y: 0, z: 5, rotY: 0 },
+      { id: 'vehicle-beta', x: -25, y: 0, z: -20, rotY: 0 },
+      { id: 'vehicle-gamma', x: 25, y: 0, z: 20, rotY: 0 },
+      { id: 'vehicle-delta', x: -20, y: 0, z: 25, rotY: 0 },
     ];
 
-    for (const pos of wheelPositions) {
-      const wheelHolder = new THREE.Mesh(tireGeo, tireMat);
-      wheelHolder.position.set(pos.x, pos.y, pos.z);
-      wheelHolder.rotation.z = Math.PI / 2;
-      wheelHolder.castShadow = true;
-      wheelHolder.receiveShadow = true;
-
-      const hubcap = new THREE.Mesh(hubcapGeo, hubcapMat);
-      wheelHolder.add(hubcap);
-
-      this.wheelMeshes.push(wheelHolder);
-      this.vehicleGroup.add(wheelHolder);
+    for (const def of defaultVehicles) {
+      if (!this.worldVehicles.has(def.id)) {
+        const visual = this.createVehicleVisualInstance(def.id, def.x, def.y, def.z, def.rotY);
+        this.worldVehicles.set(def.id, visual);
+      }
     }
 
-    // 7. Blocos Modulares Destrutíveis da Lataria (Lego-style Modular Blocks)
-    this.modularBlockMeshes.clear();
-    for (const block of this.world.modularVehicle.blocks) {
-      const blockGeo = new THREE.BoxGeometry(block.size.w, block.size.h, block.size.d);
-      const blockMat = new THREE.MeshStandardMaterial({
-        color: block.colorHex,
-        roughness: 0.35,
-        metalness: 0.15,
-      });
-
-      const blockMesh = new THREE.Mesh(blockGeo, blockMat);
-      blockMesh.position.set(block.relativePos.x, block.relativePos.y, block.relativePos.z);
-      blockMesh.castShadow = true;
-      blockMesh.receiveShadow = true;
-
-      // Pino central decorativo (stud) no topo do bloco modular
-      const studGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.08, 12);
-      const studMesh = new THREE.Mesh(studGeo, blockMat);
-      studMesh.position.set(0, block.size.h / 2 + 0.04, 0);
-      studMesh.castShadow = true;
-      blockMesh.add(studMesh);
-
-      this.modularBlockMeshes.set(block.id, blockMesh);
-      this.vehicleGroup.add(blockMesh);
+    const alphaVisual = this.worldVehicles.get('vehicle-alpha');
+    if (alphaVisual) {
+      this.vehicleGroup = alphaVisual.mesh;
+      this.wheelMeshes = alphaVisual.wheels;
     }
+  }
 
-    // Posição inicial a partir do GameWorld
-    this.vehicleGroup.position.set(
-      this.world.vehicleTransform.x,
-      0,
-      this.world.vehicleTransform.z,
-    );
-    this.vehicleGroup.rotation.y = this.world.vehicleTransform.rotationY;
-
-    this.scene.add(this.vehicleGroup);
+  private createBlockBuggy(): void {
+    this.initArenaVehicles();
   }
 
   /**
@@ -1829,6 +1892,29 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     } else if (code === 'KeyE') {
       if (!event.repeat) {
+        if (!this.world.isDriving()) {
+          const hX = this.world.heroTransform.x;
+          const hZ = this.world.heroTransform.z;
+          let nearestVehicle: VehicleVisual | null = null;
+          let nearestDist = 4.5;
+
+          for (const v of this.worldVehicles.values()) {
+            if (!v.driverId) {
+              const d = Math.hypot(v.currentX - hX, v.currentZ - hZ);
+              if (d < nearestDist) {
+                nearestDist = d;
+                nearestVehicle = v;
+              }
+            }
+          }
+
+          if (nearestVehicle) {
+            this.localDrivingVehicleId = nearestVehicle.id;
+            this.world.vehicleTransform.x = nearestVehicle.currentX;
+            this.world.vehicleTransform.z = nearestVehicle.currentZ;
+            this.world.vehicleTransform.rotationY = nearestVehicle.currentRotationY;
+          }
+        }
         this.world.triggerInteract();
         this.world.setInput({ jump: false, handbrake: false });
       }
@@ -2038,21 +2124,47 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
       this.animateHeroProcedural(delta, time);
     }
 
-    if (this.vehicleGroup) {
-      this.vehicleGroup.position.set(vehicle.x, 0, vehicle.z);
-      this.vehicleGroup.rotation.y = vehicle.rotationY;
+    // 2.1. Interpolação e sincronização dos 4 Veículos da Arena (alpha, beta, gamma, delta)
+    const vLerp = Math.min(1, delta * 14.0);
+    for (const visual of this.worldVehicles.values()) {
+      if (isDriving && visual.id === this.localDrivingVehicleId) {
+        // Veículo conduzido pelo jogador local: predição direta da física local
+        visual.mesh.position.set(vehicle.x, 0, vehicle.z);
+        visual.mesh.rotation.y = vehicle.rotationY;
+        visual.currentX = vehicle.x;
+        visual.currentY = 0;
+        visual.currentZ = vehicle.z;
+        visual.currentRotationY = vehicle.rotationY;
 
-      // Animação das rodas girando com a velocidade
-      const wheelSpin = vehicleComp.currentSpeed * delta * 2.2;
-      for (const wheel of this.wheelMeshes) {
-        wheel.rotation.x += wheelSpin;
-      }
+        const wheelSpin = vehicleComp.currentSpeed * delta * 2.2;
+        for (const wheel of visual.wheels) {
+          wheel.rotation.x += wheelSpin;
+        }
 
-      // Efeito de rolagem de carroceria sutil em curvas e drift
-      if (vehicleComp.isDrifting) {
-        this.vehicleGroup.rotation.z = Math.sin(time * 20.0) * 0.04;
+        if (vehicleComp.isDrifting) {
+          visual.mesh.rotation.z = Math.sin(time * 20.0) * 0.04;
+        } else {
+          visual.mesh.rotation.z = 0;
+        }
       } else {
-        this.vehicleGroup.rotation.z = 0;
+        // Veículos remotos ou estacionados: interpolação suave do servidor
+        visual.currentX += (visual.targetX - visual.currentX) * vLerp;
+        visual.currentY += (visual.targetY - visual.currentY) * vLerp;
+        visual.currentZ += (visual.targetZ - visual.currentZ) * vLerp;
+
+        let vRotDiff = (visual.targetRotationY - visual.currentRotationY) % (Math.PI * 2);
+        if (vRotDiff > Math.PI) vRotDiff -= Math.PI * 2;
+        if (vRotDiff < -Math.PI) vRotDiff += Math.PI * 2;
+        visual.currentRotationY += vRotDiff * vLerp;
+
+        visual.mesh.position.set(visual.currentX, visual.currentY, visual.currentZ);
+        visual.mesh.rotation.y = visual.currentRotationY;
+
+        const wheelSpin = visual.speed * delta * 2.2;
+        for (const wheel of visual.wheels) {
+          wheel.rotation.x += wheelSpin;
+        }
+        visual.mesh.rotation.z = 0;
       }
     }
 
@@ -2196,27 +2308,37 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
       const isMoving = distSq > 0.0004;
       let visualY = visual.currentY;
 
-      if (isMoving) {
-        visualY += Math.abs(Math.sin(time * 12.0)) * 0.06;
-        const swing = Math.sin(time * 12.0) * 0.75;
-        if (visual.leftLegPivot) visual.leftLegPivot.rotation.x = swing;
-        if (visual.rightLegPivot) visual.rightLegPivot.rotation.x = -swing;
-        if (visual.leftArmPivot) visual.leftArmPivot.rotation.x = -swing * 0.65;
-        if (visual.rightArmPivot) visual.rightArmPivot.rotation.x = swing * 0.65;
+      if (visual.isDriving) {
+        visualY = visual.currentY + 0.35;
+        visual.mesh.scale.set(0.85, 0.85, 0.85);
+        if (visual.leftLegPivot) visual.leftLegPivot.rotation.x = -Math.PI / 2.3;
+        if (visual.rightLegPivot) visual.rightLegPivot.rotation.x = -Math.PI / 2.3;
+        if (visual.leftArmPivot) visual.leftArmPivot.rotation.x = -Math.PI / 3.5;
+        if (visual.rightArmPivot) visual.rightArmPivot.rotation.x = -Math.PI / 3.5;
       } else {
-        const idleLerp = Math.min(1, delta * 10.0);
-        if (visual.leftLegPivot) visual.leftLegPivot.rotation.x += (0 - visual.leftLegPivot.rotation.x) * idleLerp;
-        if (visual.rightLegPivot) visual.rightLegPivot.rotation.x += (0 - visual.rightLegPivot.rotation.x) * idleLerp;
-        if (visual.leftArmPivot) visual.leftArmPivot.rotation.x += (0 - visual.leftArmPivot.rotation.x) * idleLerp;
-        if (visual.rightArmPivot) visual.rightArmPivot.rotation.x += (0 - visual.rightArmPivot.rotation.x) * idleLerp;
+        visual.mesh.scale.set(1.0, 1.0, 1.0);
+        if (isMoving) {
+          visualY += Math.abs(Math.sin(time * 12.0)) * 0.06;
+          const swing = Math.sin(time * 12.0) * 0.75;
+          if (visual.leftLegPivot) visual.leftLegPivot.rotation.x = swing;
+          if (visual.rightLegPivot) visual.rightLegPivot.rotation.x = -swing;
+          if (visual.leftArmPivot) visual.leftArmPivot.rotation.x = -swing * 0.65;
+          if (visual.rightArmPivot) visual.rightArmPivot.rotation.x = swing * 0.65;
+        } else {
+          const idleLerp = Math.min(1, delta * 10.0);
+          if (visual.leftLegPivot) visual.leftLegPivot.rotation.x += (0 - visual.leftLegPivot.rotation.x) * idleLerp;
+          if (visual.rightLegPivot) visual.rightLegPivot.rotation.x += (0 - visual.rightLegPivot.rotation.x) * idleLerp;
+          if (visual.leftArmPivot) visual.leftArmPivot.rotation.x += (0 - visual.leftArmPivot.rotation.x) * idleLerp;
+          if (visual.rightArmPivot) visual.rightArmPivot.rotation.x += (0 - visual.rightArmPivot.rotation.x) * idleLerp;
+        }
       }
 
       visual.mesh.position.set(visual.currentX, visualY, visual.currentZ);
       visual.mesh.rotation.y = visual.currentRotationY;
     }
 
-    // 7.5. Atualização de Iluminação e Ciclo Dia e Noite Dinâmico
-    const cycleState = this.dayNightSystem?.update(delta);
+    // 7.5. Atualização de Iluminação e Ciclo Dia e Noite Dinâmico (Sincronizado entre Navegadores)
+    const cycleState = this.dayNightSystem?.update(delta, Date.now());
     if (cycleState) {
       if (this.timeOfDayPhase() !== cycleState.phase) {
         this.timeOfDayPhase.set(cycleState.phase);
@@ -2277,10 +2399,38 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
         if (this.countdownSeconds() !== cdSec) this.countdownSeconds.set(cdSec);
         const intSec = Math.ceil(match.intermissionSeconds);
         if (this.intermissionSeconds() !== intSec) this.intermissionSeconds.set(intSec);
-        if (this.upgradeOptions() !== (match.upgradeOptions ?? [])) {
-          this.upgradeOptions.set(match.upgradeOptions ?? []);
-        }
         if (this.playerScores() !== match.scores) this.playerScores.set(match.scores);
+
+        // Atualização da lista lateral de jogadores online
+        const updatedList: OnlinePlayerItem[] = [];
+        const localId = this.networkService.localPlayerId() || 'local';
+        const localScore = match.scores?.find((s) => s.playerId === localId);
+        updatedList.push({
+          id: localId,
+          name: this.localPilotName().trim() || 'Meu Piloto',
+          characterType: this.localCharacterType(),
+          isDriving: currentDriving,
+          health: currentHeroHp,
+          maxHealth: currentHeroMaxHp,
+          isLocal: true,
+          kills: localScore?.kills ?? 0,
+          ping: this.networkService.pingMs(),
+        });
+
+        for (const [rId, rVisual] of this.remotePlayerVisuals.entries()) {
+          const rScore = match.scores?.find((s) => s.playerId === rId);
+          updatedList.push({
+            id: rId,
+            name: rVisual.name,
+            characterType: rVisual.characterType || 'hobo_lego',
+            isDriving: !!rVisual.isDriving,
+            health: rVisual.health,
+            maxHealth: rVisual.maxHealth,
+            isLocal: false,
+            kills: rScore?.kills ?? 0,
+          });
+        }
+        this.onlinePlayers.set(updatedList);
       });
     }
   }

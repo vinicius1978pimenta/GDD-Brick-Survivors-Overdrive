@@ -31,7 +31,7 @@ export class ScenarioFactory {
       this.buildIndustrialContainers(group, structures);
       this.buildIndustrialBarricades(group, structures);
     } else {
-      floorMesh = this.buildCityFloor(group);
+      floorMesh = this.buildCityFloor(group, studTexture);
       this.buildPerimeterWalls(group, structures, 0x475569, 0x38bdf8);
       this.buildCityBuildings(group, structures);
       this.buildCityStreetsAndMonuments(group, structures);
@@ -105,14 +105,18 @@ export class ScenarioFactory {
   // Piso Cinza Claro (Cidade Urbana/Asfalto) & Prédios de 2 e 3 Andares
   // ==========================================
 
-  private static buildCityFloor(parent: THREE.Group): THREE.Mesh {
+  private static buildCityFloor(
+    parent: THREE.Group,
+    studTexture?: THREE.CanvasTexture | null,
+  ): THREE.Mesh {
     const size = this.ARENA_SIZE;
     const floorGeo = new THREE.BoxGeometry(size, 0.8, size);
-    // Asfalto cinza claro estilo cidade moderna
+    // Asfalto e calçadas cinza claro estilo cidade moderna LEGO
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x94a3b8,
+      color: 0xd1d5db,
       roughness: 0.45,
-      metalness: 0.15,
+      metalness: 0.12,
+      ...(studTexture ? { map: studTexture } : {}),
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.position.set(0, -0.4, 0);
@@ -363,8 +367,8 @@ export class ScenarioFactory {
     const outpostHouses = [
       { x: -35, z: -35, w: 12, h: 5.4, d: 10, rot: 0 },
       { x: 35, z: -35, w: 12, h: 5.4, d: 10, rot: 0 },
-      { x: -35, z: 35, w: 14, h: 5.8, d: 11, rot: Math.PI / 4 },
-      { x: 35, z: 35, w: 14, h: 5.8, d: 11, rot: -Math.PI / 4 },
+      { x: -35, z: 35, w: 14, h: 5.8, d: 12, rot: 0 },
+      { x: 35, z: 35, w: 14, h: 5.8, d: 12, rot: 0 },
     ];
 
     for (const h of outpostHouses) {
