@@ -55,14 +55,14 @@ export interface PendingInput {
     readonly left: boolean;
     readonly right: boolean;
     readonly handbrake: boolean;
-    readonly jump: boolean;
+    readonly jump?: boolean;
     readonly interact: boolean;
   };
   readonly dt: number;
-  readonly predictedPosition: {
-    readonly x: number;
-    readonly y: number;
-    readonly z: number;
+  predictedPosition: {
+    x: number;
+    y: number;
+    z: number;
   };
 }
 

@@ -233,6 +233,94 @@ describe('GameViewportComponent', () => {
     }).not.toThrow();
   });
 
+  it('deve exibir o badge de rede como OFFLINE quando desconectado e ONLINE com ping quando conectado', () => {
+    component.networkService.isConnected.set(false);
+    fixture.detectChanges();
+
+    let compiled = fixture.nativeElement as HTMLElement;
+    let badge = compiled.querySelector('.badge-network');
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toContain('OFFLINE');
+
+    // Conecta na partida com ping de 42ms
+    component.networkService.isConnected.set(true);
+    component.networkService.pingMs.set(42);
+    fixture.detectChanges();
+
+    compiled = fixture.nativeElement as HTMLElement;
+    badge = compiled.querySelector('.badge-network');
+    expect(badge?.textContent).toContain('ONLINE');
+    expect(badge?.textContent).toContain('42 ms');
+  });
+
+  it('deve sincronizar entidades remotas a partir de snapshots autoritativos e removê-las ao desconectar', () => {
+    component.networkService.localPlayerId.set('player-local');
+
+    // Snapshot com 1 jogador remoto
+    const snapshotWithRemote = {
+      tick: 10,
+      timestamp: Date.now(),
+      players: [
+        {
+          id: 'player-local',
+          name: 'Hero Local',
+          x: 0,
+          y: 0,
+          z: 0,
+          rotationY: 0,
+          speed: 0,
+          isDriving: false,
+          isGrounded: true,
+          vehicleId: null,
+        },
+        {
+          id: 'player-remote-1',
+          name: 'Remote Buddy',
+          x: 5.0,
+          y: 0,
+          z: 5.0,
+          rotationY: 1.57,
+          speed: 6.0,
+          isDriving: false,
+          isGrounded: true,
+          vehicleId: null,
+        },
+      ],
+      vehicles: [],
+      ackInputs: { 'player-local': 5 },
+    };
+
+    expect(() => {
+      component.handleServerSnapshot(snapshotWithRemote);
+    }).not.toThrow();
+
+    // Snapshot seguinte sem o jogador remoto (desconectou)
+    const snapshotWithoutRemote = {
+      tick: 11,
+      timestamp: Date.now(),
+      players: [
+        {
+          id: 'player-local',
+          name: 'Hero Local',
+          x: 0,
+          y: 0,
+          z: 0,
+          rotationY: 0,
+          speed: 0,
+          isDriving: false,
+          isGrounded: true,
+          vehicleId: null,
+        },
+      ],
+      vehicles: [],
+      ackInputs: { 'player-local': 6 },
+    };
+
+    expect(() => {
+      component.handleServerSnapshot(snapshotWithoutRemote);
+    }).not.toThrow();
+  });
+
   it('deve executar o ciclo de vida ngAfterViewInit e ngOnDestroy limpando recursos sem erros', () => {
     fixture.detectChanges();
 

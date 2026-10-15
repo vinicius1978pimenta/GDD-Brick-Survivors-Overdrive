@@ -94,7 +94,7 @@ export class NetworkService {
     left: boolean;
     right: boolean;
     handbrake: boolean;
-    jump: boolean;
+    jump?: boolean;
     interact: boolean;
     dt: number;
   }): number {
@@ -106,7 +106,7 @@ export class NetworkService {
       left: input.left,
       right: input.right,
       handbrake: input.handbrake,
-      jump: input.jump,
+      jump: Boolean(input.jump),
       interact: input.interact,
       dt: input.dt,
       timestamp: Date.now(),

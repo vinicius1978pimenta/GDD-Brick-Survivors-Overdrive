@@ -137,4 +137,98 @@ describe('GameWorld (ECS Coordinator)', () => {
 
     expect(world.isDriving()).toBe(false);
   });
+
+  it('deve enfileirar inputs no buffer de predição e gerenciar seu tamanho', () => {
+    expect(world.getPendingInputsCount()).toBe(0);
+
+    world.enqueuePendingInput(1, world.inputState, 0.016);
+    world.enqueuePendingInput(2, world.inputState, 0.016);
+
+    expect(world.getPendingInputsCount()).toBe(2);
+    expect(world.pendingInputs[0].seq).toBe(1);
+    expect(world.pendingInputs[1].seq).toBe(2);
+
+    world.clearPendingInputs();
+    expect(world.getPendingInputsCount()).toBe(0);
+  });
+
+  it('deve reconciliar e corrigir a posição com replay dos inputs pendentes quando houver divergência relevante', () => {
+    // Simula 3 inputs locais enfileirados
+    world.heroTransform.x = 0;
+    world.heroTransform.z = 0;
+
+    world.enqueuePendingInput(1, { ...world.inputState, forward: true }, 0.016);
+    world.enqueuePendingInput(2, { ...world.inputState, forward: true }, 0.016);
+    world.enqueuePendingInput(3, { ...world.inputState, forward: true }, 0.016);
+
+    // Servidor confirma até o input 1, mas com posição diferente da local (ex: x=4.0, divergência > 0.25)
+    const snapshot = {
+      tick: 20,
+      timestamp: Date.now(),
+      players: [
+        {
+          id: 'player-local',
+          name: 'Hero',
+          x: 4.0,
+          y: 0,
+          z: 0,
+          rotationY: 0,
+          speed: 8.0,
+          isDriving: false,
+          isGrounded: true,
+          vehicleId: null,
+        },
+      ],
+      vehicles: [],
+      ackInputs: { 'player-local': 1 },
+    };
+
+    const result = world.reconcileServerSnapshot(snapshot, 'player-local', 0.25);
+
+    expect(result.reconciled).toBe(true);
+    expect(result.divergence).toBeGreaterThan(0.25);
+    // Input 1 descartado, restam 2 e 3
+    expect(world.getPendingInputsCount()).toBe(2);
+    expect(world.pendingInputs[0].seq).toBe(2);
+    // Posição local corrigida e avançada a partir do estado autoritativo
+    expect(world.heroTransform.x).toBeGreaterThanOrEqual(4.0);
+  });
+
+  it('não deve reconciliar se a divergência for mínima, mas deve descartar inputs confirmados', () => {
+    world.heroTransform.x = 2.0;
+    world.heroTransform.z = 1.0;
+
+    world.enqueuePendingInput(1, world.inputState, 0.016);
+    world.enqueuePendingInput(2, world.inputState, 0.016);
+
+    // Servidor confirma o input 1 com posição muito próxima (divergência < 0.25)
+    const snapshot = {
+      tick: 25,
+      timestamp: Date.now(),
+      players: [
+        {
+          id: 'player-local',
+          name: 'Hero',
+          x: 2.05,
+          y: 0,
+          z: 1.02,
+          rotationY: 0,
+          speed: 0,
+          isDriving: false,
+          isGrounded: true,
+          vehicleId: null,
+        },
+      ],
+      vehicles: [],
+      ackInputs: { 'player-local': 1 },
+    };
+
+    const result = world.reconcileServerSnapshot(snapshot, 'player-local', 0.25);
+
+    expect(result.reconciled).toBe(false);
+    expect(result.divergence).toBeLessThan(0.25);
+    // Input 1 descartado do buffer mesmo sem reconciliação bruta
+    expect(world.getPendingInputsCount()).toBe(1);
+    expect(world.pendingInputs[0].seq).toBe(2);
+  });
 });

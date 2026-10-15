@@ -14,6 +14,20 @@ import {
 import { isPlatformBrowser } from '@angular/common';
 import * as THREE from 'three';
 import { GameWorld } from '../../core/engine';
+import { NetworkService, WorldStateSnapshot } from '../../core/network';
+
+interface RemotePlayerVisual {
+  mesh: THREE.Group;
+  currentX: number;
+  currentY: number;
+  currentZ: number;
+  currentRotationY: number;
+  targetX: number;
+  targetY: number;
+  targetZ: number;
+  targetRotationY: number;
+  name: string;
+}
 
 @Component({
   selector: 'app-game-viewport',
@@ -78,6 +92,10 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   private idleTime = 0;
   private hudUpdateTimer = 0;
 
+  // Gerenciamento de entidades e visualização de jogadores remotos no mundo
+  private readonly remotePlayerVisuals = new Map<string, RemotePlayerVisual>();
+  private unsubscribeSnapshots: (() => void) | null = null;
+
   // Listeners vinculados para desmontagem limpa
   private boundOnPointerDown = this.onPointerDown.bind(this);
   private boundOnPointerMove = this.onPointerMove.bind(this);
@@ -89,6 +107,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   constructor(
     private readonly ngZone: NgZone,
     @Inject(PLATFORM_ID) private readonly platformId: object,
+    public readonly networkService: NetworkService,
   ) {}
 
   public ngAfterViewInit(): void {
@@ -100,10 +119,24 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.setupResizeObserver();
     this.attachEventListeners();
     this.startGameLoop();
+
+    // Inicia comunicação de rede com o Gateway NestJS
+    this.networkService.connect();
+    this.networkService.joinGame('Hero Player');
+
+    this.unsubscribeSnapshots = this.networkService.onSnapshot((snapshot) => {
+      this.handleServerSnapshot(snapshot);
+    });
   }
 
   public ngOnDestroy(): void {
     this.isDestroyed = true;
+
+    if (this.unsubscribeSnapshots) {
+      this.unsubscribeSnapshots();
+      this.unsubscribeSnapshots = null;
+    }
+    this.networkService.disconnect();
 
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
@@ -473,6 +506,153 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
+   * Cria uma malha 3D de herói de blocos para representar jogadores remotos (Multiplayer).
+   */
+  public createRemoteHeroMesh(colorHex = 0x10b981): THREE.Group {
+    const group = new THREE.Group();
+
+    const headMat = new THREE.MeshStandardMaterial({ color: 0xfcd116, roughness: 0.35, metalness: 0.05 });
+    const torsoMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3, metalness: 0.1 });
+    const hipsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.4, metalness: 0.1 });
+    const legsMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.35, metalness: 0.1 });
+    const visorMat = new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      roughness: 0.15,
+      metalness: 0.8,
+      emissive: 0x0284c7,
+      emissiveIntensity: 0.6,
+    });
+
+    const legGeo = new THREE.BoxGeometry(0.38, 0.9, 0.45);
+    const leftLeg = new THREE.Mesh(legGeo, legsMat);
+    leftLeg.position.set(-0.25, 0.45, 0);
+    leftLeg.castShadow = true;
+    group.add(leftLeg);
+
+    const rightLeg = new THREE.Mesh(legGeo, legsMat);
+    rightLeg.position.set(0.25, 0.45, 0);
+    rightLeg.castShadow = true;
+    group.add(rightLeg);
+
+    const hipsGeo = new THREE.BoxGeometry(0.92, 0.25, 0.5);
+    const hips = new THREE.Mesh(hipsGeo, hipsMat);
+    hips.position.set(0, 0.98, 0);
+    hips.castShadow = true;
+    group.add(hips);
+
+    const torsoGeo = new THREE.BoxGeometry(1.0, 1.1, 0.6);
+    const torso = new THREE.Mesh(torsoGeo, torsoMat);
+    torso.position.set(0, 1.65, 0);
+    torso.castShadow = true;
+    group.add(torso);
+
+    const headGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.6, 20);
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.set(0, 2.45, 0);
+    head.castShadow = true;
+    group.add(head);
+
+    const studGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.16, 16);
+    const headStud = new THREE.Mesh(studGeo, headMat);
+    headStud.position.set(0, 2.82, 0);
+    headStud.castShadow = true;
+    group.add(headStud);
+
+    const visorGeo = new THREE.BoxGeometry(0.5, 0.16, 0.16);
+    const visor = new THREE.Mesh(visorGeo, visorMat);
+    visor.position.set(0, 2.48, 0.32);
+    group.add(visor);
+
+    const armGeo = new THREE.BoxGeometry(0.26, 0.85, 0.3);
+    const leftArm = new THREE.Mesh(armGeo, torsoMat);
+    leftArm.position.set(-0.68, 1.65, 0);
+    leftArm.castShadow = true;
+    group.add(leftArm);
+
+    const rightArm = new THREE.Mesh(armGeo, torsoMat);
+    rightArm.position.set(0.68, 1.65, 0);
+    rightArm.castShadow = true;
+    group.add(rightArm);
+
+    return group;
+  }
+
+  /**
+   * Processa snapshots autoritativos recebidos do servidor NestJS:
+   * 1. Reconciliação do jogador local.
+   * 2. Criação/atualização/remoção das malhas dos jogadores remotos.
+   */
+  public handleServerSnapshot(snapshot: WorldStateSnapshot): void {
+    const localId = this.networkService.localPlayerId();
+    if (localId) {
+      this.world.reconcileServerSnapshot(snapshot, localId);
+    }
+
+    const currentRemoteIds = new Set<string>();
+
+    for (const player of snapshot.players) {
+      if (player.id === localId) {
+        continue;
+      }
+
+      currentRemoteIds.add(player.id);
+      let visual = this.remotePlayerVisuals.get(player.id);
+
+      if (!visual && this.scene) {
+        const mesh = this.createRemoteHeroMesh();
+        mesh.position.set(player.x, player.y, player.z);
+        mesh.rotation.y = player.rotationY;
+        this.scene.add(mesh);
+
+        visual = {
+          mesh,
+          currentX: player.x,
+          currentY: player.y,
+          currentZ: player.z,
+          currentRotationY: player.rotationY,
+          targetX: player.x,
+          targetY: player.y,
+          targetZ: player.z,
+          targetRotationY: player.rotationY,
+          name: player.name,
+        };
+        this.remotePlayerVisuals.set(player.id, visual);
+      } else if (visual) {
+        visual.targetX = player.x;
+        visual.targetY = player.y;
+        visual.targetZ = player.z;
+        visual.targetRotationY = player.rotationY;
+      }
+    }
+
+    // Limpa jogadores remotos desconectados da partida
+    for (const [id, visual] of this.remotePlayerVisuals.entries()) {
+      if (!currentRemoteIds.has(id)) {
+        if (this.scene) {
+          this.scene.remove(visual.mesh);
+        }
+        this.disposeObject3D(visual.mesh);
+        this.remotePlayerVisuals.delete(id);
+      }
+    }
+  }
+
+  private disposeObject3D(obj: THREE.Object3D): void {
+    obj.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        if (child.geometry) {
+          child.geometry.dispose();
+        }
+        if (Array.isArray(child.material)) {
+          child.material.forEach((mat) => mat.dispose());
+        } else if (child.material) {
+          child.material.dispose();
+        }
+      }
+    });
+  }
+
+  /**
    * Cria o modelo 3D do Veículo (Buggy Arcade de Blocos).
    * Chassi amarelo/preto, 4 rodas volumosas em cilindros pretos com calotas, santantônio e bancos.
    */
@@ -832,6 +1012,21 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
    * Atualiza lógica da simulação ECS, posições dos meshes 3D e câmera adaptativa.
    */
   private updateGameLogic(delta: number, time: number): void {
+    // Envia o input local e enfileira no buffer de predição do cliente
+    if (this.networkService.isConnected()) {
+      const seq = this.networkService.sendInput({
+        forward: this.world.inputState.forward,
+        backward: this.world.inputState.backward,
+        left: this.world.inputState.left,
+        right: this.world.inputState.right,
+        handbrake: this.world.inputState.handbrake,
+        jump: Boolean(this.world.inputState.jump),
+        interact: this.world.inputState.interact,
+        dt: delta,
+      });
+      this.world.enqueuePendingInput(seq, this.world.inputState, delta);
+    }
+
     // 1. Avança a simulação determinística do GameWorld
     this.world.step(delta);
 
@@ -969,7 +1164,23 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       }
     }
 
-    // 4. Atualização dos Sinais Reativos do HUD (a cada ~60ms para performance)
+    // 4. Interpolação suave (lerp) das entidades remotas (Multiplayer Visual)
+    const remoteLerpSpeed = Math.min(1, delta * 15.0);
+    for (const visual of this.remotePlayerVisuals.values()) {
+      visual.currentX += (visual.targetX - visual.currentX) * remoteLerpSpeed;
+      visual.currentY += (visual.targetY - visual.currentY) * remoteLerpSpeed;
+      visual.currentZ += (visual.targetZ - visual.currentZ) * remoteLerpSpeed;
+
+      let rotDiff = (visual.targetRotationY - visual.currentRotationY) % (Math.PI * 2);
+      if (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+      if (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+      visual.currentRotationY += rotDiff * remoteLerpSpeed;
+
+      visual.mesh.position.set(visual.currentX, visual.currentY, visual.currentZ);
+      visual.mesh.rotation.y = visual.currentRotationY;
+    }
+
+    // 5. Atualização dos Sinais Reativos do HUD (a cada ~60ms para performance)
     this.hudUpdateTimer += delta;
     if (this.hudUpdateTimer >= 0.06) {
       this.hudUpdateTimer = 0;
@@ -1034,6 +1245,11 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.heroGroup = null;
     this.vehicleGroup = null;
     this.wheelMeshes = [];
+
+    for (const visual of this.remotePlayerVisuals.values()) {
+      this.disposeObject3D(visual.mesh);
+    }
+    this.remotePlayerVisuals.clear();
 
     for (const mesh of this.debrisMeshes.values()) {
       mesh.geometry.dispose();

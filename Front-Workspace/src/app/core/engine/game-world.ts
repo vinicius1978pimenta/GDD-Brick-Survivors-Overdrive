@@ -332,7 +332,15 @@ export class GameWorld {
   public enqueuePendingInput(seq: number, input: InputState, dt: number): void {
     this.pendingInputs.push({
       seq,
-      input: { ...input },
+      input: {
+        forward: input.forward,
+        backward: input.backward,
+        left: input.left,
+        right: input.right,
+        handbrake: input.handbrake,
+        jump: Boolean(input.jump),
+        interact: input.interact,
+      },
       dt,
       predictedPosition: {
         x: this.heroTransform.x,

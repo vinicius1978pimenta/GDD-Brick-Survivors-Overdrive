@@ -8,6 +8,19 @@
       <span>Brick Survivors: Overdrive</span>
     </div>
 
+    <!-- Badge de Rede Multiplayer -->
+    <div
+      class="badge-network"
+      [class.network-online]="networkService.isConnected()"
+      [class.network-offline]="!networkService.isConnected()"
+    >
+      <span class="network-dot"></span>
+      <span class="network-status">{{ networkService.isConnected() ? 'ONLINE' : 'OFFLINE' }}</span>
+      @if (networkService.isConnected()) {
+        <span class="network-ping">{{ networkService.pingMs() }} ms</span>
+      }
+    </div>
+
     <div class="mode-badge" [class.mode-driving]="isDriving()">
       <span class="mode-icon">{{ isDriving() ? '🏎️' : '🚶' }}</span>
       <span class="mode-text">{{ isDriving() ? 'PILOTANDO BUGGY' : 'A PÉ (HERÓI)' }}</span>
