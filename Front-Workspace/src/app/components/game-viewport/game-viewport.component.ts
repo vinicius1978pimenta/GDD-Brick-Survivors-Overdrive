@@ -212,6 +212,29 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
     this.initializeThreeScene();
     this.setupResizeObserver();
     this.attachEventListeners();
+
+    // Sincroniza envio de input estritamente com o fixed timestep determinístico de 60Hz
+    this.world.onBeforeFixedUpdate = (dt) => {
+      const currentRotationY = this.world.isDriving()
+        ? this.world.vehicleTransform.rotationY
+        : this.world.heroTransform.rotationY;
+
+      if (this.networkService.isConnected()) {
+        const seq = this.networkService.sendInput({
+          forward: this.world.inputState.forward,
+          backward: this.world.inputState.backward,
+          left: this.world.inputState.left,
+          right: this.world.inputState.right,
+          handbrake: this.world.inputState.handbrake,
+          jump: Boolean(this.world.inputState.jump),
+          interact: this.world.inputState.interact,
+          rotationY: currentRotationY,
+          dt,
+        });
+        this.world.enqueuePendingInput(seq, this.world.inputState, dt, currentRotationY);
+      }
+    };
+
     this.startGameLoop();
 
     this.networkService.connect();
@@ -2055,7 +2078,7 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
    * Atualiza lógica da simulação ECS, posições dos meshes 3D e câmera adaptativa.
    */
   private updateGameLogic(delta: number, time: number): void {
-    // Se a pé, orienta a direção do herói para onde o mouse aponta na arena (twin-stick / strafe) ANTES de enviar o input
+    // Se a pé, orienta a direção do herói para onde o mouse aponta na arena (twin-stick / strafe)
     if (!this.world.isDriving()) {
       if (this.camera) {
         this.updateAimTarget();
@@ -2068,27 +2091,7 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
-    const currentRotationY = this.world.isDriving()
-      ? this.world.vehicleTransform.rotationY
-      : this.world.heroTransform.rotationY;
-
-    // Envia o input local e enfileira no buffer de predição do cliente com rotação atual sincronizada
-    if (this.networkService.isConnected()) {
-      const seq = this.networkService.sendInput({
-        forward: this.world.inputState.forward,
-        backward: this.world.inputState.backward,
-        left: this.world.inputState.left,
-        right: this.world.inputState.right,
-        handbrake: this.world.inputState.handbrake,
-        jump: Boolean(this.world.inputState.jump),
-        interact: this.world.inputState.interact,
-        rotationY: currentRotationY,
-        dt: delta,
-      });
-      this.world.enqueuePendingInput(seq, this.world.inputState, delta, currentRotationY);
-    }
-
-    // 1. Avança a simulação determinística do GameWorld
+    // 1. Avança a simulação determinística do GameWorld (dispara onBeforeFixedUpdate a 60Hz)
     this.world.step(delta);
 
     const isDriving = this.world.isDriving();
@@ -2277,17 +2280,27 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
     // 6. Atualização de animação e projeção dos números flutuantes de dano
     this.updateFloatingTexts(delta);
 
-    // 7. Interpolação suave (lerp) das entidades remotas (Multiplayer Visual)
-    const remoteLerpSpeed = Math.min(1, delta * 15.0);
+    // 7. Interpolação suave e ágil (lerp) das entidades remotas (Multiplayer Visual)
+    const remoteLerpSpeed = Math.min(1, delta * 24.0);
     for (const visual of this.remotePlayerVisuals.values()) {
-      visual.currentX += (visual.targetX - visual.currentX) * remoteLerpSpeed;
-      visual.currentY += (visual.targetY - visual.currentY) * remoteLerpSpeed;
-      visual.currentZ += (visual.targetZ - visual.currentZ) * remoteLerpSpeed;
+      const distSq =
+        (visual.targetX - visual.currentX) ** 2 + (visual.targetZ - visual.currentZ) ** 2;
 
-      let rotDiff = (visual.targetRotationY - visual.currentRotationY) % (Math.PI * 2);
-      if (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
-      if (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
-      visual.currentRotationY += rotDiff * remoteLerpSpeed;
+      if (distSq > 16.0) {
+        visual.currentX = visual.targetX;
+        visual.currentY = visual.targetY;
+        visual.currentZ = visual.targetZ;
+        visual.currentRotationY = visual.targetRotationY;
+      } else {
+        visual.currentX += (visual.targetX - visual.currentX) * remoteLerpSpeed;
+        visual.currentY += (visual.targetY - visual.currentY) * remoteLerpSpeed;
+        visual.currentZ += (visual.targetZ - visual.currentZ) * remoteLerpSpeed;
+
+        let rotDiff = (visual.targetRotationY - visual.currentRotationY) % (Math.PI * 2);
+        if (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+        if (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+        visual.currentRotationY += rotDiff * remoteLerpSpeed;
+      }
 
       visual.mesh.position.set(visual.currentX, visual.currentY, visual.currentZ);
       visual.mesh.rotation.y = visual.currentRotationY;

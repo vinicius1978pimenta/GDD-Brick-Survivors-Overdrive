@@ -44,7 +44,8 @@ export class NetworkService {
     }
 
     this.socket = io(serverUrl, {
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
+      upgrade: false,
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: 10,
@@ -235,7 +236,7 @@ export class NetworkService {
   /**
    * Dispara pings periódicos para calcular a latência (RTT) em tempo real.
    */
-  public startHeartbeatPing(intervalMs = 2000): void {
+  public startHeartbeatPing(intervalMs = 1000): void {
     this.stopHeartbeatPing();
 
     if (!isPlatformBrowser(this.platformId)) {

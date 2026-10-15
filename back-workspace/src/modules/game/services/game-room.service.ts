@@ -155,7 +155,9 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       x: spawnX,
       y: 0,
       z: spawnZ,
+      vx: 0,
       vy: 0,
+      vz: 0,
       rotationY: angle,
       speed: 0,
       isDriving: false,
@@ -328,7 +330,9 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       player.isDriving = false;
       player.vehicleId = null;
       player.speed = 0;
+      player.vx = 0;
       player.vy = 0;
+      player.vz = 0;
       player.isGrounded = true;
 
       player.x = this.clamp(player.x, ARENA_BOUNDS.minX, ARENA_BOUNDS.maxX);
@@ -358,7 +362,9 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       player.z = candidateVehicle.z;
       player.rotationY = candidateVehicle.rotationY;
       player.speed = candidateVehicle.currentSpeed;
+      player.vx = 0;
       player.vy = 0;
+      player.vz = 0;
       player.isGrounded = true;
     }
   }
@@ -390,18 +396,27 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       dx /= len;
       dz /= len;
       player.speed = Math.min(PLAYER_CONFIG.maxSpeed, player.speed + PLAYER_CONFIG.acceleration * dt);
-      const vx = dx * player.speed;
-      const vz = dz * player.speed;
-      player.x += vx * dt;
-      player.z += vz * dt;
+      player.vx = dx * player.speed;
+      player.vz = dz * player.speed;
+      player.x += player.vx * dt;
+      player.z += player.vz * dt;
     } else {
       if (player.speed > 0) {
         player.speed = Math.max(0, player.speed - PLAYER_CONFIG.deceleration * dt);
-      } else if (player.speed < 0) {
-        player.speed = Math.min(0, player.speed + PLAYER_CONFIG.deceleration * dt);
-      }
-      if (Math.abs(player.speed) < 0.05) {
+        const currentLen = Math.hypot(player.vx, player.vz);
+        if (currentLen > 0.001) {
+          player.vx = (player.vx / currentLen) * player.speed;
+          player.vz = (player.vz / currentLen) * player.speed;
+          player.x += player.vx * dt;
+          player.z += player.vz * dt;
+        } else {
+          player.vx = 0;
+          player.vz = 0;
+        }
+      } else {
         player.speed = 0;
+        player.vx = 0;
+        player.vz = 0;
       }
     }
 
@@ -441,8 +456,20 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
 
     if (player.speed > 0) {
       player.speed = Math.max(0, player.speed - PLAYER_CONFIG.deceleration * dt);
-    } else if (player.speed < 0) {
-      player.speed = Math.min(0, player.speed + PLAYER_CONFIG.deceleration * dt);
+      const currentLen = Math.hypot(player.vx, player.vz);
+      if (currentLen > 0.001) {
+        player.vx = (player.vx / currentLen) * player.speed;
+        player.vz = (player.vz / currentLen) * player.speed;
+        player.x += player.vx * dt;
+        player.z += player.vz * dt;
+      } else {
+        player.vx = 0;
+        player.vz = 0;
+      }
+    } else {
+      player.speed = 0;
+      player.vx = 0;
+      player.vz = 0;
     }
 
     if (player.y > 0) {

@@ -7,7 +7,9 @@ export interface ConnectedPlayer {
   x: number;
   y: number;
   z: number;
+  vx: number;
   vy: number;
+  vz: number;
   rotationY: number;
   speed: number;
   isDriving: boolean;
@@ -45,24 +47,24 @@ export const SIMULATION_CONFIG = {
   tickRateHz: 20,
   dt: 0.05, // 1 / 20 = 50ms
   intervalMs: 50,
-  maxPendingInputsPerTick: 10,
+  maxPendingInputsPerTick: 30,
 } as const;
 
 export const VEHICLE_CONFIG = {
-  maxSpeed: 18.0,
+  maxSpeed: 22.0,
   reverseMaxSpeed: -8.0,
-  acceleration: 14.0,
-  brakeForce: 22.0,
-  friction: 6.0,
-  turnSpeed: 2.8,
+  acceleration: 16.0,
+  brakeForce: 26.0,
+  friction: 7.0,
+  turnSpeed: 2.85,
   interactionRadius: 2.8,
 } as const;
 
 export const PLAYER_CONFIG = {
-  maxSpeed: 7.5,
-  reverseMaxSpeed: 4.1,
-  acceleration: 16.0,
-  deceleration: 20.0,
+  maxSpeed: 8.0,
+  reverseMaxSpeed: 4.5,
+  acceleration: 22.0,
+  deceleration: 26.0,
   turnSpeed: 3.8,
   jumpForce: 7.2,
   gravity: 18.0,

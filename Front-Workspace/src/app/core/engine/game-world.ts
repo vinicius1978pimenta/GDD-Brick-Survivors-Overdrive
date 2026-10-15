@@ -71,10 +71,10 @@ export class GameWorld {
 
   public readonly heroController: CharacterControllerComponent = {
     speed: 0,
-    maxSpeed: 8.5,
-    reverseMaxSpeed: -4.8,
-    acceleration: 24.0,
-    deceleration: 28.0,
+    maxSpeed: 8.0,
+    reverseMaxSpeed: -4.5,
+    acceleration: 22.0,
+    deceleration: 26.0,
     turnSpeed: 3.8,
     jumpForce: 7.2,
     gravity: 18.0,
@@ -100,11 +100,11 @@ export class GameWorld {
 
   public readonly vehicleComponent: VehicleComponent = {
     currentSpeed: 0,
-    maxSpeed: 24.0, // ~86 km/h
+    maxSpeed: 22.0, // ~79 km/h
     reverseMaxSpeed: -8.0,
-    acceleration: 18.0,
-    brakeForce: 30.0,
-    friction: 7.5,
+    acceleration: 16.0,
+    brakeForce: 26.0,
+    friction: 7.0,
     turnSpeed: 2.85,
     isDrifting: false,
     driverEntityId: null,
@@ -162,6 +162,9 @@ export class GameWorld {
   public readonly gameLoop: GameLoop;
   public readonly bounds: ArenaBounds;
 
+  /** Gancho opcional disparado antes de cada passo da simulação determinística de 60Hz */
+  public onBeforeFixedUpdate?: (dt: number) => void;
+
   constructor(bounds: ArenaBounds = DEFAULT_ARENA_BOUNDS) {
     this.bounds = bounds;
     this.gameLoop = new GameLoop((dt) => this.fixedUpdate(dt));
@@ -171,6 +174,10 @@ export class GameWorld {
    * Atualização determinística em Fixed Timestep (60Hz).
    */
   public fixedUpdate(dt: number = FIXED_TIMESTEP): void {
+    if (this.onBeforeFixedUpdate) {
+      this.onBeforeFixedUpdate(dt);
+    }
+
     // 1. Sistema de Interação (Embarque / Desembarque)
     updateInteractionSystem(
       this.heroTransform,
