@@ -541,7 +541,7 @@ describe('GameRoomService', () => {
       expect(snapshot).toHaveProperty('damageEvents');
 
       expect(snapshot.players.length).toBe(1);
-      expect(snapshot.vehicles.length).toBe(1);
+      expect(snapshot.vehicles.length).toBe(4);
 
       const p = snapshot.players[0];
       expect(typeof p.x).toBe('number');
@@ -573,7 +573,7 @@ describe('GameRoomService', () => {
 
       const shootResult = service.handlePlayerShoot('socket-1', {
         weaponType: 'stud_blaster',
-        origin: { x: 0, y: 1.0, z: 2.5 },
+        origin: { x: 50, y: 1.0, z: 50 },
         direction: { x: 0, y: 0, z: 1 },
         clientTimestamp: Date.now(),
       });
@@ -617,12 +617,11 @@ describe('GameRoomService', () => {
 
   describe('Pedestrian vs Vehicle Solid Collision', () => {
     it('should push pedestrian out when attempting to walk forward into the front of vehicle', () => {
-      // Vehicle is at (0, 0, 0), rotation 0. Front edge is z = +1.6, back is z = -1.6
+      const vehicle = service.getVehicle('vehicle-alpha')!;
       const player = service.addPlayer('socket-1', 'Walker');
-      // Place player just in front of vehicle facing south (towards the car)
-      player.x = 0;
-      player.z = 2.2;
-      player.rotationY = Math.PI; // facing -Z (towards vehicle at z = 0)
+      player.x = vehicle.x;
+      player.z = vehicle.z + 2.2;
+      player.rotationY = Math.PI; // facing -Z (towards vehicle)
 
       // Move forward towards the car
       service.enqueueInput('socket-1', {
@@ -640,17 +639,17 @@ describe('GameRoomService', () => {
 
       service.stepSimulation(0.05);
 
-      // Half length is 1.6, hero radius is 0.5. Player must not penetrate past 1.6 + 0.5 = 2.1
+      // Half length is 1.6, hero radius is 0.5. Player must not penetrate past vehicle.z + 1.6 + 0.5 = vehicle.z + 2.1
       expect(player.z).toBeGreaterThanOrEqual(
-        VEHICLE_COLLISION_CONFIG.halfLength + HERO_COLLISION_CONFIG.radius - 0.001,
+        vehicle.z + VEHICLE_COLLISION_CONFIG.halfLength + HERO_COLLISION_CONFIG.radius - 0.001,
       );
     });
 
     it('should push pedestrian out when attempting to walk into the side door of vehicle', () => {
-      // Vehicle is at (0, 0, 0), halfWidth = 0.9. Right edge is x = +0.9
+      const vehicle = service.getVehicle('vehicle-alpha')!;
       const player = service.addPlayer('socket-1', 'SideWalker');
-      player.x = 1.45;
-      player.z = 0;
+      player.x = vehicle.x + 1.45;
+      player.z = vehicle.z;
       player.rotationY = -Math.PI / 2; // facing -X (towards vehicle)
 
       service.enqueueInput('socket-1', {
@@ -668,38 +667,35 @@ describe('GameRoomService', () => {
 
       service.stepSimulation(0.05);
 
-      // Must be kept outside: halfWidth + heroRadius = 0.9 + 0.5 = 1.4
+      // Must be kept outside: vehicle.x + halfWidth + heroRadius = vehicle.x + 0.9 + 0.5 = vehicle.x + 1.4
       expect(player.x).toBeGreaterThanOrEqual(
-        VEHICLE_COLLISION_CONFIG.halfWidth + HERO_COLLISION_CONFIG.radius - 0.001,
+        vehicle.x + VEHICLE_COLLISION_CONFIG.halfWidth + HERO_COLLISION_CONFIG.radius - 0.001,
       );
     });
 
     it('should project pedestrian out if spawned directly inside the vehicle', () => {
+      const vehicle = service.getVehicle('vehicle-alpha')!;
       const player = service.addPlayer('socket-1', 'InsideMan');
-      player.x = 0.2;
-      player.z = 0.2;
+      player.x = vehicle.x + 0.2;
+      player.z = vehicle.z + 0.2;
 
       // When stepping simulation, player should be pushed out to the exterior
       service.stepSimulation(0.05);
 
-      const vehicle = service.getVehicle('vehicle-alpha');
-      expect(vehicle).toBeDefined();
-      if (vehicle) {
-        // Player should now be outside the bounding box + radius
-        const dx = Math.abs(player.x - vehicle.x);
-        const dz = Math.abs(player.z - vehicle.z);
-        const outside =
-          dx >= VEHICLE_COLLISION_CONFIG.halfWidth + HERO_COLLISION_CONFIG.radius - 0.001 ||
-          dz >= VEHICLE_COLLISION_CONFIG.halfLength + HERO_COLLISION_CONFIG.radius - 0.001;
-        expect(outside).toBe(true);
-      }
+      const dx = Math.abs(player.x - vehicle.x);
+      const dz = Math.abs(player.z - vehicle.z);
+      const outside =
+        dx >= VEHICLE_COLLISION_CONFIG.halfWidth + HERO_COLLISION_CONFIG.radius - 0.001 ||
+        dz >= VEHICLE_COLLISION_CONFIG.halfLength + HERO_COLLISION_CONFIG.radius - 0.001;
+      expect(outside).toBe(true);
     });
 
     it('should slide tangentially when walking diagonally against the vehicle body', () => {
+      const vehicle = service.getVehicle('vehicle-alpha')!;
       const player = service.addPlayer('socket-1', 'Slider');
       // Place on right side of vehicle
-      player.x = 1.42;
-      player.z = 0;
+      player.x = vehicle.x + 1.42;
+      player.z = vehicle.z;
       // Angle diagonally forward and left towards the car (-X and +Z)
       player.rotationY = -(3 * Math.PI) / 4;
 
@@ -720,37 +716,34 @@ describe('GameRoomService', () => {
 
       // Should maintain X boundary
       expect(player.x).toBeGreaterThanOrEqual(
-        VEHICLE_COLLISION_CONFIG.halfWidth + HERO_COLLISION_CONFIG.radius - 0.001,
+        vehicle.x + VEHICLE_COLLISION_CONFIG.halfWidth + HERO_COLLISION_CONFIG.radius - 0.001,
       );
     });
 
     it('should not push out driver who is currently driving the vehicle', () => {
+      const vehicle = service.getVehicle('vehicle-alpha')!;
       const player = service.addPlayer('socket-1', 'Driver');
       player.isDriving = true;
-      player.vehicleId = 'vehicle-alpha';
-      player.x = 0;
-      player.z = 0;
+      player.vehicleId = vehicle.id;
+      player.x = vehicle.x;
+      player.z = vehicle.z;
 
-      const vehicle = service.getVehicle('vehicle-alpha');
-      expect(vehicle).toBeDefined();
-
-      const collided = service.resolvePedestrianVehicleCollision(player, vehicle!);
+      const collided = service.resolvePedestrianVehicleCollision(player, vehicle);
       expect(collided).toBe(false);
-      expect(player.x).toBe(0);
-      expect(player.z).toBe(0);
+      expect(player.x).toBe(vehicle.x);
+      expect(player.z).toBe(vehicle.z);
     });
 
     it('should correctly handle rotated vehicle OBB orientation', () => {
-      const vehicle = service.getVehicle('vehicle-alpha');
-      expect(vehicle).toBeDefined();
+      const vehicle = service.getVehicle('vehicle-alpha')!;
       // Rotate vehicle 90 degrees (Math.PI / 2)
       // Now length (3.2m, half 1.6m) runs along X and width (1.8m, half 0.9m) runs along Z
-      vehicle!.rotationY = Math.PI / 2;
+      vehicle.rotationY = Math.PI / 2;
 
       const player = service.addPlayer('socket-1', 'OBBWalker');
       // Place player along rotated vehicle's front (now +X direction)
-      player.x = 2.15;
-      player.z = 0;
+      player.x = vehicle.x + 2.15;
+      player.z = vehicle.z;
       player.rotationY = -Math.PI / 2; // facing -X towards vehicle
 
       service.enqueueInput('socket-1', {
@@ -769,7 +762,198 @@ describe('GameRoomService', () => {
       service.stepSimulation(0.05);
 
       // In rotated space, front is along X so halfLength (1.6) + heroRadius (0.5) = 2.1
-      expect(player.x).toBeGreaterThanOrEqual(2.1 - 0.01);
+      expect(player.x).toBeGreaterThanOrEqual(vehicle.x + 2.1 - 0.01);
+    });
+  });
+
+  describe('Multiple Synchronized Vehicles', () => {
+    it('should initialize 4 default vehicles distributed across the arena', () => {
+      const vehicles = service.getVehicles();
+      expect(vehicles.length).toBe(4);
+
+      const alpha = service.getVehicle('vehicle-alpha');
+      const beta = service.getVehicle('vehicle-beta');
+      const gamma = service.getVehicle('vehicle-gamma');
+      const delta = service.getVehicle('vehicle-delta');
+
+      expect(alpha).toBeDefined();
+      expect(alpha?.x).toBe(0);
+      expect(alpha?.z).toBe(5);
+
+      expect(beta).toBeDefined();
+      expect(beta?.x).toBe(-25);
+      expect(beta?.z).toBe(-20);
+
+      expect(gamma).toBeDefined();
+      expect(gamma?.x).toBe(25);
+      expect(gamma?.z).toBe(20);
+
+      expect(delta).toBeDefined();
+      expect(delta?.x).toBe(-20);
+      expect(delta?.z).toBe(25);
+    });
+
+    it('should board the closest unoccupied vehicle when multiple exist', () => {
+      const player = service.addPlayer('socket-1', 'Drifter');
+      // Position player next to vehicle-beta at (-25, 0, -20)
+      player.x = -24.0;
+      player.z = -20.0;
+
+      service.enqueueInput('socket-1', {
+        seq: 1,
+        forward: false,
+        backward: false,
+        left: false,
+        right: false,
+        handbrake: false,
+        jump: false,
+        interact: true,
+        dt: 0.05,
+        timestamp: Date.now(),
+      });
+
+      service.stepSimulation(0.05);
+
+      expect(player.isDriving).toBe(true);
+      expect(player.vehicleId).toBe('vehicle-beta');
+
+      const beta = service.getVehicle('vehicle-beta');
+      expect(beta?.driverId).toBe(player.id);
+    });
+  });
+
+  describe('Character Selection (characterType)', () => {
+    it('should register player with specified characterType and include in snapshot', () => {
+      const player = service.addPlayer('socket-char', 'TribalHero', 'funny_indigenous');
+      expect(player.characterType).toBe('funny_indigenous');
+
+      const snapshot = service.stepSimulation(0.05);
+      const snapshotPlayer = snapshot.players.find((p) => p.id === 'socket-char');
+      expect(snapshotPlayer?.characterType).toBe('funny_indigenous');
+    });
+
+    it('should default to hobo_lego when characterType is omitted', () => {
+      const player = service.addPlayer('socket-default', 'DefaultHero');
+      expect(player.characterType).toBe('hobo_lego');
+
+      const snapshot = service.stepSimulation(0.05);
+      const snapshotPlayer = snapshot.players.find((p) => p.id === 'socket-default');
+      expect(snapshotPlayer?.characterType).toBe('hobo_lego');
+    });
+  });
+
+  describe('Vehicular Ramming Damage and Kill Event', () => {
+    it('should inflict ramming damage and knockback when driving at high speed into pedestrian', () => {
+      const driver = service.addPlayer('socket-driver', 'MadMax');
+      const victim = service.addPlayer('socket-victim', 'PedestrianVictim');
+
+      const vehicle = service.getVehicle('vehicle-alpha')!;
+      driver.isDriving = true;
+      driver.vehicleId = vehicle.id;
+      vehicle.driverId = driver.id;
+      vehicle.currentSpeed = 10.0; // High speed
+      vehicle.x = 0;
+      vehicle.z = 0;
+      vehicle.rotationY = 0; // facing +Z
+
+      // Place victim directly in front of moving vehicle
+      victim.x = 0;
+      victim.z = 1.0;
+      victim.health = 100;
+
+      const collided = service.resolvePedestrianVehicleCollision(victim, vehicle);
+
+      expect(collided).toBe(true);
+      // Damage = floor(10.0 * 3.5) = 35
+      expect(victim.health).toBe(65);
+      expect(victim.z).toBeGreaterThan(1.0); // Knocked forward
+      expect(victim.y).toBeGreaterThan(0); // Knocked in air
+    });
+
+    it('should record kill when ramming damage reduces pedestrian health to zero', () => {
+      const driver = service.addPlayer('socket-driver', 'RoadWarrior');
+      const victim = service.addPlayer('socket-victim', 'FragilePedestrian');
+
+      const vehicle = service.getVehicle('vehicle-alpha')!;
+      driver.isDriving = true;
+      driver.vehicleId = vehicle.id;
+      vehicle.driverId = driver.id;
+      vehicle.currentSpeed = 12.0;
+
+      victim.x = vehicle.x;
+      victim.z = vehicle.z + 1.0;
+      victim.health = 20; // Will be lethal with speed 12 (damage floor(12 * 3.5) = 42)
+
+      const matchManager = service.getMatchManagerService();
+      const initialKills = matchManager.getScores()[0]?.kills ?? 0;
+
+      service.resolvePedestrianVehicleCollision(victim, vehicle);
+
+      expect(victim.health).toBe(0);
+      const updatedScores = matchManager.getScores();
+      const driverScore = updatedScores.find((s) => s.playerId === driver.id);
+      expect(driverScore?.kills).toBe(initialKills + 1);
+    });
+  });
+
+  describe('City Obstacles Collision (AABB)', () => {
+    it('should push pedestrian outside when intersecting a city obstacle', () => {
+      const player = service.addPlayer('socket-obs', 'CityExplorer');
+      // Place inside repair garage: minX: -20, maxX: -12, minZ: -8, maxZ: 2
+      player.x = -15;
+      player.z = -3;
+
+      const hit = service.resolveObstacleCollisions(player, HERO_COLLISION_CONFIG.radius);
+
+      expect(hit).toBe(true);
+      // Player should be pushed outside the box
+      const insideX = player.x >= -20 && player.x <= -12;
+      const insideZ = player.z >= -8 && player.z <= 2;
+      expect(insideX && insideZ).toBe(false);
+    });
+
+    it('should push vehicle outside and dampen speed when vehicle collides with obstacle', () => {
+      const vehicle = service.getVehicle('vehicle-alpha')!;
+      // Place inside gas station: minX: 12, maxX: 20, minZ: -8, maxZ: 2
+      vehicle.x = 15;
+      vehicle.z = -3;
+      vehicle.currentSpeed = 10.0;
+
+      const hit = service.resolveObstacleCollisions(vehicle, VEHICLE_COLLISION_CONFIG.radius);
+
+      expect(hit).toBe(true);
+      const insideX = vehicle.x >= 12 && vehicle.x <= 20;
+      const insideZ = vehicle.z >= -8 && vehicle.z <= 2;
+      expect(insideX && insideZ).toBe(false);
+    });
+  });
+
+  describe('Match Restart (Jogar Novamente)', () => {
+    it('should reset match state, restore player HP, reset vehicles and spawn positions', () => {
+      const p1 = service.addPlayer('socket-1', 'Fighter1');
+      const p2 = service.addPlayer('socket-2', 'Fighter2');
+      p1.health = 25;
+      p2.health = 10;
+
+      const vehicle = service.getVehicle('vehicle-alpha')!;
+      p1.isDriving = true;
+      p1.vehicleId = vehicle.id;
+      vehicle.driverId = p1.id;
+      vehicle.currentSpeed = 15.0;
+
+      const snapshot = service.restartMatch();
+
+      expect(snapshot.match.state).toBe('waiting');
+      expect(p1.health).toBe(100);
+      expect(p2.health).toBe(100);
+      expect(p1.isDriving).toBe(false);
+      expect(p1.vehicleId).toBeNull();
+
+      const alphaAfter = service.getVehicle('vehicle-alpha')!;
+      expect(alphaAfter.driverId).toBeNull();
+      expect(alphaAfter.currentSpeed).toBe(0);
+      expect(alphaAfter.x).toBe(0);
+      expect(alphaAfter.z).toBe(5);
     });
   });
 });

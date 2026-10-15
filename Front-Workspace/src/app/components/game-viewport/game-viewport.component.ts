@@ -26,13 +26,24 @@ import {
 import { NetworkService, ProjectileSnapshot, WorldStateSnapshot } from '../../core/network';
 import {
   FloatingCombatText,
+  KillFeedItem,
+  OnlinePlayerItem,
   PlayerOverheadTag,
   RemotePlayerVisual,
   TimeOfDayPhase,
+  VehicleVisual,
 } from './interfaces/game-viewport.interface';
+import { KillEvent } from '../../core/network/types/network.types';
 import { ScenarioBuildResult } from './interfaces/scenario.interface';
 import { ScenarioFactory } from './scenario.factory';
 import { DayNightSystem } from './day-night.system';
+import {
+  CharacterProfile,
+  CharacterType,
+  CHARACTER_PROFILES,
+} from '../../core/engine/types/character.types';
+import { CharacterMeshFactory } from './character-mesh.factory';
+import { CITY_OBSTACLES } from '../../core/engine/types/ecs.types';
 import {
   EnemyEntity,
   EnemyType,
@@ -104,6 +115,26 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
   public readonly pilotNameInput = signal('');
   public readonly nameValidationError = signal<string | null>(null);
   public readonly localPilotName = signal('Piloto');
+
+  // Seleção dos 4 Personagens LEGO no Lobby
+  public readonly selectedCharacter = signal<CharacterType>('hobo_lego');
+  public readonly localCharacterType = signal<CharacterType>('hobo_lego');
+  public readonly characterProfiles = CHARACTER_PROFILES;
+  public readonly characterTypeList: CharacterType[] = [
+    'hobo_lego',
+    'hillbilly_girl',
+    'funny_indigenous',
+    'black_shorts',
+  ];
+
+  // Killfeed em Tempo Real e Lista Lateral de Jogadores Online
+  public readonly killfeed = signal<KillFeedItem[]>([]);
+  public readonly onlinePlayers = signal<OnlinePlayerItem[]>([]);
+  public readonly isPlayerListOpen = signal(true);
+
+  // Múltiplos Veículos Sincronizados
+  public readonly worldVehicles = new Map<string, VehicleVisual>();
+  private unsubscribeKillEvents: (() => void) | null = null;
 
   // Barra de Vida (HP do Piloto e Overhead Tags Flutuantes)
   public readonly pilotHealth = signal(100);
@@ -205,6 +236,11 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
         if (saved && saved.trim().length >= 2) {
           this.pilotNameInput.set(saved.trim());
         }
+        const savedChar = localStorage.getItem('bso_character_type') as CharacterType;
+        if (savedChar && this.characterProfiles[savedChar]) {
+          this.selectedCharacter.set(savedChar);
+          this.localCharacterType.set(savedChar);
+        }
       } catch {}
     }
   }
@@ -220,6 +256,34 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Sincroniza envio de input estritamente com o fixed timestep determinístico de 60Hz
     this.world.onBeforeFixedUpdate = (dt) => {
+      // Bloqueio físico de atravessamento de prédios (AABB) e acesso aos telhados
+      const hero = this.world.heroTransform;
+      for (const obs of CITY_OBSTACLES) {
+        const roof = obs.roofHeight ?? 6.0;
+        const padding = 0.6;
+        if (
+          hero.x >= obs.minX - padding &&
+          hero.x <= obs.maxX + padding &&
+          hero.z >= obs.minZ - padding &&
+          hero.z <= obs.maxZ + padding
+        ) {
+          if (hero.y >= roof - 0.4) {
+            hero.y = Math.max(hero.y, roof);
+          } else {
+            const dxMin = Math.abs(hero.x - (obs.minX - padding));
+            const dxMax = Math.abs(hero.x - (obs.maxX + padding));
+            const dzMin = Math.abs(hero.z - (obs.minZ - padding));
+            const dzMax = Math.abs(hero.z - (obs.maxZ + padding));
+            const minDiff = Math.min(dxMin, dxMax, dzMin, dzMax);
+
+            if (minDiff === dxMin) hero.x = obs.minX - padding;
+            else if (minDiff === dxMax) hero.x = obs.maxX + padding;
+            else if (minDiff === dzMin) hero.z = obs.minZ - padding;
+            else hero.z = obs.maxZ + padding;
+          }
+        }
+      }
+
       const currentRotationY = this.world.isDriving()
         ? this.world.vehicleTransform.rotationY
         : this.world.heroTransform.rotationY;
@@ -247,6 +311,32 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
     this.unsubscribeSnapshots = this.networkService.onSnapshot((snapshot) => {
       this.handleServerSnapshot(snapshot);
     });
+
+    this.unsubscribeKillEvents = this.networkService.onKillEvent((event) => {
+      this.handleKillEvent(event);
+    });
+  }
+
+  public selectCharacter(type: CharacterType): void {
+    this.selectedCharacter.set(type);
+  }
+
+  public handleKillEvent(event: KillEvent): void {
+    const icon = event.reason === 'atropelamento' ? 'mdi:car-side' : 'mdi:sword-cross';
+    const item: KillFeedItem = {
+      id: `kill_${Date.now()}_${Math.random()}`,
+      killerName: event.killerName || 'Piloto',
+      victimName: event.victimName || 'Inimigo',
+      reason: event.reason,
+      timestamp: event.timestamp || Date.now(),
+      icon,
+    };
+
+    this.killfeed.update((feed) => [item, ...feed].slice(0, 5));
+
+    window.setTimeout(() => {
+      this.killfeed.update((feed) => feed.filter((f) => f.id !== item.id));
+    }, 5000);
   }
 
   public onPilotNameChange(event: Event): void {
@@ -266,16 +356,22 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.nameValidationError.set(null);
     this.localPilotName.set(rawName);
+    this.localCharacterType.set(this.selectedCharacter());
     this.hasJoinedArena.set(true);
 
     if (typeof localStorage !== 'undefined') {
       try {
         localStorage.setItem('bso_pilot_name', rawName);
+        localStorage.setItem('bso_character_type', this.selectedCharacter());
       } catch {}
     }
 
+    if (this.scene) {
+      this.createBlockHero();
+    }
+
     this.networkService.connect();
-    this.networkService.joinGame(rawName);
+    this.networkService.joinGame(rawName, this.selectedCharacter());
 
     if (this.world.matchState.scores[0]) {
       this.world.matchState.scores[0].name = rawName;
@@ -288,6 +384,10 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.unsubscribeSnapshots) {
       this.unsubscribeSnapshots();
       this.unsubscribeSnapshots = null;
+    }
+    if (this.unsubscribeKillEvents) {
+      this.unsubscribeKillEvents();
+      this.unsubscribeKillEvents = null;
     }
     this.networkService.disconnect();
 
@@ -506,310 +606,36 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
   private createBlockHero(): void {
     if (!this.scene) return;
 
-    this.heroGroup = new THREE.Group();
-    this.heroGroup.position.set(0, 0, 0);
-
-    // Paleta de Materiais PBR Cyber-Táticos de Alta Fidelidade
-    const armorDarkMat = new THREE.MeshStandardMaterial({
-      color: 0x111827,
-      roughness: 0.22,
-      metalness: 0.8,
-    });
-    const armorCobaltMat = new THREE.MeshStandardMaterial({
-      color: 0x0284c7,
-      roughness: 0.2,
-      metalness: 0.7,
-    });
-    const armorGoldMat = new THREE.MeshStandardMaterial({
-      color: 0xf59e0b,
-      roughness: 0.25,
-      metalness: 0.85,
-    });
-    const visorHoloMat = new THREE.MeshStandardMaterial({
-      color: 0x00ffff,
-      roughness: 0.08,
-      metalness: 0.9,
-      emissive: 0x00e5ff,
-      emissiveIntensity: 1.1,
-    });
-    const arcReactorMat = new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
-      emissive: 0x00f0ff,
-      emissiveIntensity: 2.0,
-      roughness: 0.1,
-    });
-    const thrusterPlasmaMat = new THREE.MeshStandardMaterial({
-      color: 0x06b6d4,
-      emissive: 0x22d3ee,
-      emissiveIntensity: 2.2,
-      roughness: 0.15,
-    });
-    const sensorNeonMat = new THREE.MeshStandardMaterial({
-      color: 0xef4444,
-      emissive: 0xef4444,
-      emissiveIntensity: 1.5,
-    });
-
-    const legGeo = new THREE.BoxGeometry(0.38, 0.9, 0.45);
-    const footGeo = new THREE.BoxGeometry(0.4, 0.22, 0.38);
-    const kneePadGeo = new THREE.BoxGeometry(0.42, 0.24, 0.12);
-
-    // 1. Pivô da Perna Esquerda (com grevas e botas magnéticas)
-    this.heroLeftLegPivot = new THREE.Group();
-    this.heroLeftLegPivot.position.set(-0.25, 0.9, 0);
-
-    const leftLeg = new THREE.Mesh(legGeo, armorCobaltMat);
-    leftLeg.position.set(0, -0.45, 0);
-    leftLeg.castShadow = true;
-    leftLeg.receiveShadow = true;
-    this.heroLeftLegPivot.add(leftLeg);
-
-    // Joelheira tática reforçada
-    const leftKneePad = new THREE.Mesh(kneePadGeo, armorGoldMat);
-    leftKneePad.position.set(0, -0.38, 0.25);
-    leftKneePad.castShadow = true;
-    this.heroLeftLegPivot.add(leftKneePad);
-
-    // Bota blindada com solado magnético escuro
-    const leftFoot = new THREE.Mesh(footGeo, armorDarkMat);
-    leftFoot.position.set(0, -0.8, 0.08);
-    leftFoot.castShadow = true;
-    this.heroLeftLegPivot.add(leftFoot);
-    this.heroGroup.add(this.heroLeftLegPivot);
-
-    // 2. Pivô da Perna Direita (com grevas e botas magnéticas)
-    this.heroRightLegPivot = new THREE.Group();
-    this.heroRightLegPivot.position.set(0.25, 0.9, 0);
-
-    const rightLeg = new THREE.Mesh(legGeo, armorCobaltMat);
-    rightLeg.position.set(0, -0.45, 0);
-    rightLeg.castShadow = true;
-    rightLeg.receiveShadow = true;
-    this.heroRightLegPivot.add(rightLeg);
-
-    // Joelheira tática reforçada
-    const rightKneePad = new THREE.Mesh(kneePadGeo, armorGoldMat);
-    rightKneePad.position.set(0, -0.38, 0.25);
-    rightKneePad.castShadow = true;
-    this.heroRightLegPivot.add(rightKneePad);
-
-    // Bota blindada
-    const rightFoot = new THREE.Mesh(footGeo, armorDarkMat);
-    rightFoot.position.set(0, -0.8, 0.08);
-    rightFoot.castShadow = true;
-    this.heroRightLegPivot.add(rightFoot);
-    this.heroGroup.add(this.heroRightLegPivot);
-
-    // 3. Cinturão & Pélvis Tática (Tactical Belt & Pelvis)
-    const hipsGeo = new THREE.BoxGeometry(0.96, 0.28, 0.52);
-    const hips = new THREE.Mesh(hipsGeo, armorDarkMat);
-    hips.position.set(0, 0.98, 0);
-    hips.castShadow = true;
-    this.heroGroup.add(hips);
-
-    const buckleGeo = new THREE.BoxGeometry(0.28, 0.2, 0.56);
-    const buckle = new THREE.Mesh(buckleGeo, armorGoldMat);
-    buckle.position.set(0, 0.98, 0.02);
-    this.heroGroup.add(buckle);
-
-    // 4. Exoesqueleto / Armadura Peitoral (Layered Armor)
-    const torsoGeo = new THREE.BoxGeometry(1.04, 1.12, 0.62);
-    const torso = new THREE.Mesh(torsoGeo, armorCobaltMat);
-    torso.position.set(0, 1.65, 0);
-    torso.castShadow = true;
-    torso.receiveShadow = true;
-    this.heroGroup.add(torso);
-
-    // Placas de blindagem peitoral angular sobreposta
-    const chestPlateGeo = new THREE.BoxGeometry(0.96, 0.58, 0.12);
-    const chestPlate = new THREE.Mesh(chestPlateGeo, armorDarkMat);
-    chestPlate.position.set(0, 1.76, 0.32);
-    chestPlate.castShadow = true;
-    this.heroGroup.add(chestPlate);
-
-    // Reator Arc Core central com anel de contenção
-    const reactorRingGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.14, 20);
-    const reactorRing = new THREE.Mesh(reactorRingGeo, armorGoldMat);
-    reactorRing.rotation.x = Math.PI / 2;
-    reactorRing.position.set(0, 1.76, 0.39);
-    this.heroGroup.add(reactorRing);
-
-    const reactorCoreGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.16, 16);
-    const reactorCore = new THREE.Mesh(reactorCoreGeo, arcReactorMat);
-    reactorCore.rotation.x = Math.PI / 2;
-    reactorCore.position.set(0, 1.76, 0.4);
-    this.heroGroup.add(reactorCore);
-
-    // Lanterna / Farol tático cyber do herói para iluminação noturna
-    const heroSpot = new THREE.SpotLight(0x38bdf8, 2.2, 28, Math.PI / 5, 0.35);
-    heroSpot.position.set(0, 1.76, 0.45);
-    heroSpot.target.position.set(0, 1.5, 14.0);
-    heroSpot.visible = false;
-    this.heroGroup.add(heroSpot);
-    this.heroGroup.add(heroSpot.target);
-
-    if (this.dayNightSystem) {
-      this.dayNightSystem.heroFlashlight = heroSpot;
+    if (this.heroGroup) {
+      this.scene.remove(this.heroGroup);
+      this.disposeObject3D(this.heroGroup);
+      this.heroGroup = null;
     }
 
-    // 5. Capacete Cyber-Tático (Cyber-Tactical Helmet)
-    const headGeo = new THREE.CylinderGeometry(0.38, 0.42, 0.62, 20);
-    const head = new THREE.Mesh(headGeo, armorDarkMat);
-    head.position.set(0, 2.45, 0);
-    head.castShadow = true;
-    this.heroGroup.add(head);
-
-    // Crista Aerodinâmica no topo do capacete
-    const crestFinGeo = new THREE.BoxGeometry(0.08, 0.22, 0.58);
-    const crestFin = new THREE.Mesh(crestFinGeo, armorGoldMat);
-    crestFin.position.set(0, 2.82, 0.02);
-    crestFin.castShadow = true;
-    this.heroGroup.add(crestFin);
-
-    // Stud superior do capacete LEGO mecha
-    const studGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.14, 16);
-    const headStud = new THREE.Mesh(studGeo, armorCobaltMat);
-    headStud.position.set(0, 2.86, -0.05);
-    this.heroGroup.add(headStud);
-
-    // Viseira Holográfica Chanfrada
-    const visorGeo = new THREE.BoxGeometry(0.54, 0.2, 0.22);
-    const visor = new THREE.Mesh(visorGeo, visorHoloMat);
-    visor.position.set(0, 2.5, 0.33);
-    this.heroGroup.add(visor);
-
-    // Respirador Tático Angular
-    const respiratorGeo = new THREE.BoxGeometry(0.38, 0.18, 0.18);
-    const respirator = new THREE.Mesh(respiratorGeo, armorDarkMat);
-    respirator.position.set(0, 2.28, 0.35);
-    this.heroGroup.add(respirator);
-
-    // Sensor Tático / Headset com LED
-    const headsetGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.08, 12);
-    const headset = new THREE.Mesh(headsetGeo, armorGoldMat);
-    headset.rotation.z = Math.PI / 2;
-    headset.position.set(0.44, 2.48, 0.05);
-    this.heroGroup.add(headset);
-
-    const sensorLedGeo = new THREE.BoxGeometry(0.04, 0.04, 0.1);
-    const sensorLed = new THREE.Mesh(sensorLedGeo, sensorNeonMat);
-    sensorLed.position.set(0.46, 2.48, 0.16);
-    this.heroGroup.add(sensorLed);
-
-    // 6. Braços Articulados com Ombreiras Táticas (Shoulder Pauldrons)
-    const armGeo = new THREE.BoxGeometry(0.28, 0.85, 0.32);
-    const handGeo = new THREE.CylinderGeometry(0.13, 0.13, 0.18, 12);
-    const pauldronGeo = new THREE.BoxGeometry(0.42, 0.32, 0.44);
-
-    // Pivô do Braço Esquerdo
-    this.heroLeftArmPivot = new THREE.Group();
-    this.heroLeftArmPivot.position.set(-0.68, 2.1, 0);
-
-    const leftArm = new THREE.Mesh(armGeo, armorCobaltMat);
-    leftArm.position.set(0, -0.45, 0);
-    leftArm.castShadow = true;
-    this.heroLeftArmPivot.add(leftArm);
-
-    // Ombreira tática esquerda acoplada ao pivô do braço
-    const leftPauldron = new THREE.Mesh(pauldronGeo, armorDarkMat);
-    leftPauldron.position.set(-0.06, 0.06, 0);
-    leftPauldron.castShadow = true;
-    this.heroLeftArmPivot.add(leftPauldron);
-
-    const leftPauldronTrim = new THREE.Mesh(
-      new THREE.BoxGeometry(0.44, 0.08, 0.46),
-      armorGoldMat,
+    const charResult = CharacterMeshFactory.createCharacterMesh(this.localCharacterType(), true);
+    this.heroGroup = charResult.group;
+    this.heroGroup.position.set(
+      this.world.heroTransform.x,
+      this.world.heroTransform.y,
+      this.world.heroTransform.z,
     );
-    leftPauldronTrim.position.set(-0.06, 0.16, 0);
-    this.heroLeftArmPivot.add(leftPauldronTrim);
 
-    const leftHand = new THREE.Mesh(handGeo, armorDarkMat);
-    leftHand.position.set(0, -0.9, 0.08);
-    leftHand.rotation.x = Math.PI / 2;
-    leftHand.castShadow = true;
-    this.heroLeftArmPivot.add(leftHand);
-    this.heroGroup.add(this.heroLeftArmPivot);
-
-    // Pivô do Braço Direito com Socket de Arma
-    this.heroRightArmPivot = new THREE.Group();
-    this.heroRightArmPivot.position.set(0.68, 2.1, 0);
-
-    const rightArm = new THREE.Mesh(armGeo, armorCobaltMat);
-    rightArm.position.set(0, -0.45, 0);
-    rightArm.castShadow = true;
-    this.heroRightArmPivot.add(rightArm);
-
-    // Ombreira tática direita acoplada ao pivô do braço
-    const rightPauldron = new THREE.Mesh(pauldronGeo, armorDarkMat);
-    rightPauldron.position.set(0.06, 0.06, 0);
-    rightPauldron.castShadow = true;
-    this.heroRightArmPivot.add(rightPauldron);
-
-    const rightPauldronTrim = new THREE.Mesh(
-      new THREE.BoxGeometry(0.44, 0.08, 0.46),
-      armorGoldMat,
-    );
-    rightPauldronTrim.position.set(0.06, 0.16, 0);
-    this.heroRightArmPivot.add(rightPauldronTrim);
-
-    const rightHand = new THREE.Mesh(handGeo, armorDarkMat);
-    rightHand.position.set(0, -0.9, 0.08);
-    rightHand.rotation.x = Math.PI / 2;
-    rightHand.castShadow = true;
-    this.heroRightArmPivot.add(rightHand);
+    this.heroLeftLegPivot = charResult.leftLegPivot;
+    this.heroRightLegPivot = charResult.rightLegPivot;
+    this.heroLeftArmPivot = charResult.leftArmPivot;
+    this.heroRightArmPivot = charResult.rightArmPivot;
 
     // Socket de acoplamento de armas na mão direita
     this.rightHandWeaponSocket = new THREE.Group();
-    this.rightHandWeaponSocket.position.set(0, -0.9, 0.2);
+    this.rightHandWeaponSocket.position.set(0, -0.65, 0.2);
     this.heroRightArmPivot.add(this.rightHandWeaponSocket);
-    this.heroGroup.add(this.heroRightArmPivot);
-
-    // 7. Jetpack com Turbinas Gêmeas e Cones de Plasma (Twin-Thruster Backpack)
-    const backpackGeo = new THREE.BoxGeometry(0.78, 0.85, 0.32);
-    const backpack = new THREE.Mesh(backpackGeo, armorDarkMat);
-    backpack.position.set(0, 1.65, -0.42);
-    backpack.castShadow = true;
-    this.heroGroup.add(backpack);
-
-    const thrusterGeo = new THREE.CylinderGeometry(0.12, 0.15, 0.65, 16);
-    const nozzleGeo = new THREE.CylinderGeometry(0.16, 0.13, 0.12, 16);
-    const plasmaConeGeo = new THREE.ConeGeometry(0.11, 0.35, 12);
-
-    // Turbina Esquerda
-    const leftThruster = new THREE.Mesh(thrusterGeo, armorCobaltMat);
-    leftThruster.position.set(-0.28, 1.65, -0.54);
-    leftThruster.castShadow = true;
-    this.heroGroup.add(leftThruster);
-
-    const leftNozzle = new THREE.Mesh(nozzleGeo, armorGoldMat);
-    leftNozzle.position.set(-0.28, 1.28, -0.54);
-    this.heroGroup.add(leftNozzle);
-
-    const leftPlasma = new THREE.Mesh(plasmaConeGeo, thrusterPlasmaMat);
-    leftPlasma.rotation.x = Math.PI;
-    leftPlasma.position.set(-0.28, 1.05, -0.54);
-    this.heroGroup.add(leftPlasma);
-
-    // Turbina Direita
-    const rightThruster = new THREE.Mesh(thrusterGeo, armorCobaltMat);
-    rightThruster.position.set(0.28, 1.65, -0.54);
-    rightThruster.castShadow = true;
-    this.heroGroup.add(rightThruster);
-
-    const rightNozzle = new THREE.Mesh(nozzleGeo, armorGoldMat);
-    rightNozzle.position.set(0.28, 1.28, -0.54);
-    this.heroGroup.add(rightNozzle);
-
-    const rightPlasma = new THREE.Mesh(plasmaConeGeo, thrusterPlasmaMat);
-    rightPlasma.rotation.x = Math.PI;
-    rightPlasma.position.set(0.28, 1.05, -0.54);
-    this.heroGroup.add(rightPlasma);
 
     // Acopla a arma equipada inicial na mão
     this.updateHandWeaponVisual(this.world.getEquippedWeapon());
 
     this.scene.add(this.heroGroup);
   }
+
 
   /**
    * Atualiza a malha 3D da arma visível empunhada na mão direita do herói.

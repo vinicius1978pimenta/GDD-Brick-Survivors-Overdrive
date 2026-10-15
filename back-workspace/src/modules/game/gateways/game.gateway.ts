@@ -70,9 +70,13 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   ): Promise<JoinGameResponse> {
     await client.join('game-room');
     const requestedName = payload?.playerName ?? payload?.name;
-    const player = this.gameRoomService.addPlayer(client.id, requestedName);
+    const player = this.gameRoomService.addPlayer(
+      client.id,
+      requestedName,
+      payload?.characterType,
+    );
 
-    this.logger.log(`Player registered: ${player.name} (${client.id})`);
+    this.logger.log(`Player registered: ${player.name} (${client.id}) [${player.characterType}]`);
     return {
       status: 'ok',
       playerId: client.id,
@@ -156,5 +160,16 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       this.server.to('game-room').emit('matchSnapshot', matchManager.getSnapshot());
     }
     return { success };
+  }
+
+  @SubscribeMessage('restartMatch')
+  handleRestartMatch(
+    @ConnectedSocket() _client: Socket,
+  ): { success: boolean; state: string } {
+    const snapshot = this.gameRoomService.restartMatch();
+    return {
+      success: true,
+      state: snapshot.match?.state ?? 'waiting',
+    };
   }
 }

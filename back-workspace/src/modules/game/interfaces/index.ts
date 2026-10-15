@@ -6,6 +6,8 @@ export type {
 
 export {
   ARENA_BOUNDS,
+  CITY_OBSTACLES,
+  DEFAULT_CHARACTER_TYPE,
   HERO_COLLISION_CONFIG,
   PLAYER_CONFIG,
   SIMULATION_CONFIG,
@@ -14,8 +16,12 @@ export {
 } from './game-room.interface.js';
 
 export type {
+  CharacterType,
   ConnectedPlayer,
+  KillEvent,
+  KillReason,
   RoomVehicle,
+  WorldObstacleAABB,
 } from './game-room.interface.js';
 
 export type {

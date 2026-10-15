@@ -124,9 +124,9 @@ describe('MovementSystem', () => {
     expect(transform.z).toBe(0);
   });
 
-  it('deve restringir rigorosamente as coordenadas dentro dos limites da arena (-48.5 a 48.5)', () => {
-    transform.x = 65.0; // Posição fora da arena de 100x100
-    transform.z = -70.0;
+  it('deve restringir rigorosamente as coordenadas dentro dos limites da arena (-68 a 68)', () => {
+    transform.x = 85.0; // Posição fora da arena de 140x140
+    transform.z = -90.0;
     input.forward = true;
 
     updateMovementSystem(transform, velocity, controller, input, false, 0.1, DEFAULT_ARENA_BOUNDS);

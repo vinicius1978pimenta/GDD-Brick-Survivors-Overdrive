@@ -2,7 +2,10 @@ import { Injectable, Inject, PLATFORM_ID, signal } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { io, Socket } from 'socket.io-client';
 import {
+  CharacterType,
   JoinGameResponse,
+  KillEvent,
+  KillEventCallback,
   MatchSnapshotCallback,
   PlayerInputPayload,
   PlayerShootPayload,
@@ -21,8 +24,10 @@ export class NetworkService {
   private sequenceNumber = 0;
   private snapshotListeners: SnapshotCallback[] = [];
   private matchListeners: MatchSnapshotCallback[] = [];
+  private killEventListeners: KillEventCallback[] = [];
 
   private pendingPlayerName: string | null = null;
+  private pendingCharacterType: CharacterType = 'hobo_lego';
 
   // Sinais reativos públicos para o HUD e a simulação
   public readonly isConnected = signal(false);
@@ -74,12 +79,18 @@ export class NetworkService {
   }
 
   /**
-   * Entra na sala de jogo autoritativa no servidor.
+   * Entra na sala de jogo autoritativa no servidor com nome do piloto e personagem selecionado.
    * Aguarda a conexão caso ainda esteja em handshake e reconecta automaticamente.
    */
-  public async joinGame(playerName?: string): Promise<JoinGameResponse | null> {
+  public async joinGame(
+    playerName?: string,
+    characterType?: CharacterType,
+  ): Promise<JoinGameResponse | null> {
     if (playerName) {
       this.pendingPlayerName = playerName;
+    }
+    if (characterType) {
+      this.pendingCharacterType = characterType;
     }
 
     if (!isPlatformBrowser(this.platformId)) {
@@ -91,12 +102,13 @@ export class NetworkService {
     }
 
     const nameToJoin = this.pendingPlayerName ?? playerName;
+    const charToJoin = this.pendingCharacterType ?? characterType ?? 'hobo_lego';
 
     // Se o socket ainda está conectando, aguarda o evento 'connect' antes de emitir
     if (!this.isConnected()) {
       return new Promise((resolve) => {
         const onConnected = () => {
-          this.emitJoinGame(nameToJoin).then(resolve);
+          this.emitJoinGame(nameToJoin, charToJoin).then(resolve);
         };
 
         if (this.socket) {
@@ -107,24 +119,33 @@ export class NetworkService {
       });
     }
 
-    return this.emitJoinGame(nameToJoin);
+    return this.emitJoinGame(nameToJoin, charToJoin);
   }
 
-  private emitJoinGame(playerName?: string): Promise<JoinGameResponse | null> {
+  private emitJoinGame(
+    playerName?: string,
+    characterType?: CharacterType,
+  ): Promise<JoinGameResponse | null> {
     if (!this.socket) {
       return Promise.resolve(null);
     }
 
+    const charType = characterType ?? this.pendingCharacterType ?? 'hobo_lego';
+
     return new Promise((resolve) => {
-      this.socket?.emit('joinGame', { playerName }, (response: JoinGameResponse) => {
-        if (response && response.status === 'ok') {
-          this.localPlayerId.set(response.playerId);
-          this.serverTick.set(response.tick);
-          resolve(response);
-        } else {
-          resolve(null);
-        }
-      });
+      this.socket?.emit(
+        'joinGame',
+        { playerName, characterType: charType },
+        (response: JoinGameResponse) => {
+          if (response && response.status === 'ok') {
+            this.localPlayerId.set(response.playerId);
+            this.serverTick.set(response.tick);
+            resolve(response);
+          } else {
+            resolve(null);
+          }
+        },
+      );
     });
   }
 
@@ -211,6 +232,25 @@ export class NetworkService {
     if (this.socket && this.isConnected()) {
       this.socket.emit('selectUpgrade', { upgradeId });
     }
+  }
+
+  /**
+   * Solicita o reinício autoritativo da partida ao servidor.
+   */
+  public restartMatch(): void {
+    if (this.socket && this.isConnected()) {
+      this.socket.emit('restartMatch');
+    }
+  }
+
+  /**
+   * Registra um callback para eventos de kill / atropelamento em tempo real.
+   */
+  public onKillEvent(callback: KillEventCallback): () => void {
+    this.killEventListeners.push(callback);
+    return () => {
+      this.killEventListeners = this.killEventListeners.filter((cb) => cb !== callback);
+    };
   }
 
   /**
@@ -312,8 +352,23 @@ export class NetworkService {
         }
       }
 
+      if (snapshot.killEvents && snapshot.killEvents.length > 0) {
+        for (const ev of snapshot.killEvents) {
+          for (const listener of this.killEventListeners) {
+            listener(ev);
+          }
+        }
+      }
+
       for (const listener of this.snapshotListeners) {
         listener(snapshot);
+      }
+    });
+
+    this.socket.on('killEvent', (event: KillEvent) => {
+      if (!event) return;
+      for (const listener of this.killEventListeners) {
+        listener(event);
       }
     });
 

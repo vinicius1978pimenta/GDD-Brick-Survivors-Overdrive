@@ -1,8 +1,10 @@
 import type { DamageEventSnapshot, ProjectileSnapshot, WeaponType } from './combat.interface.js';
+import type { CharacterType } from './game-room.interface.js';
 
 export interface PlayerSnapshot {
   readonly id: string;
   readonly name: string;
+  readonly characterType: CharacterType;
   readonly x: number;
   readonly y: number;
   readonly z: number;

@@ -15,6 +15,7 @@ import type {
   EnemySnapshot,
   EnemyType,
   GameModeType,
+  KillReason,
   MatchState,
   MatchStateSnapshot,
   PlayerMatchScore,
@@ -429,9 +430,9 @@ export class MatchManagerService {
           }
         }
 
-        // Safe respawn distributed in expanded arena (15m to 35m radius)
+        // Safe respawn distributed in expanded 140x140 arena (20m to 45m radius)
         const respawnAngle = Math.random() * Math.PI * 2;
-        const respawnDist = 15.0 + Math.random() * 20.0;
+        const respawnDist = 20.0 + Math.random() * 25.0;
         player.health = player.maxHealth;
         player.x = Number((Math.cos(respawnAngle) * respawnDist).toFixed(2));
         player.z = Number((Math.sin(respawnAngle) * respawnDist).toFixed(2));
@@ -447,6 +448,27 @@ export class MatchManagerService {
       this.determinePvpWinner();
       this.finishMatch('victory');
       this.logger.log(`PvP Match Ended: Time limit reached. Winner: ${this.winnerId ?? 'None'}`);
+    }
+  }
+
+  public recordKill(killerId: string, victimId: string, reason: KillReason = 'combat'): void {
+    const killerScore = this.playerScores.get(killerId);
+    if (killerScore) {
+      killerScore.kills++;
+      killerScore.score += 100;
+      if (this.mode === 'pvp_deathmatch' && killerScore.kills >= PVP_CONFIG.targetKills) {
+        this.winnerId = killerId;
+        this.finishMatch('victory');
+        this.logger.log(
+          `PvP Match Ended: Player ${killerId} reached ${PVP_CONFIG.targetKills} kills via ${reason}!`,
+        );
+      }
+    }
+
+    const victimScore = this.playerScores.get(victimId);
+    if (victimScore) {
+      victimScore.deaths++;
+      victimScore.invulnerableUntil = Date.now() + PVP_CONFIG.invulnerabilityDurationMs;
     }
   }
 
@@ -484,7 +506,7 @@ export class MatchManagerService {
       for (let i = 0; i < count; i++) {
         this.enemySeq++;
         const angle = Math.random() * Math.PI * 2;
-        const spawnDist = 25.0 + Math.random() * 15.0; // 25m to 40m in 100x100 arena
+        const spawnDist = 30.0 + Math.random() * 25.0; // 30m to 55m in 140x140 arena
         const rawX = Math.cos(angle) * spawnDist;
         const rawZ = Math.sin(angle) * spawnDist;
         const clampedX = Math.max(ARENA_BOUNDS.minX + 3, Math.min(ARENA_BOUNDS.maxX - 3, rawX));
@@ -587,5 +609,18 @@ export class MatchManagerService {
     this.enemies.length = 0;
     this.readyPlayers.clear();
     this.currentUpgradeOptions = [];
+    this.timeRemaining =
+      this.mode === 'coop_survival'
+        ? COOP_CONFIG.countdownDurationSec
+        : PVP_CONFIG.matchDurationSec;
+    this.countdownSeconds = COOP_CONFIG.countdownDurationSec;
+    this.intermissionTimeRemaining = 0;
+    for (const score of this.playerScores.values()) {
+      score.kills = 0;
+      score.deaths = 0;
+      score.score = 0;
+      score.upgrades = [];
+      score.invulnerableUntil = 0;
+    }
   }
 }

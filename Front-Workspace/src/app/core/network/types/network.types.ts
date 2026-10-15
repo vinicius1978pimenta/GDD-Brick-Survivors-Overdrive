@@ -1,4 +1,19 @@
 import { GameModeType, MatchStateSnapshot } from '../../engine/types/match.types';
+import { CharacterType } from '../../engine/types/character.types';
+
+export type { CharacterType };
+
+/**
+ * Evento de eliminação (combate com arma ou atropelamento veicular).
+ */
+export interface KillEvent {
+  readonly killerId: string;
+  readonly killerName: string;
+  readonly victimId: string;
+  readonly victimName: string;
+  readonly reason: 'combat' | 'atropelamento' | string;
+  readonly timestamp: number;
+}
 
 /**
  * Tipos e contratos de rede para comunicação em tempo real com o servidor NestJS (Socket.IO).
@@ -7,6 +22,7 @@ import { GameModeType, MatchStateSnapshot } from '../../engine/types/match.types
 export interface PlayerSnapshot {
   readonly id: string;
   readonly name: string;
+  readonly characterType?: CharacterType;
   readonly x: number;
   readonly y: number;
   readonly z: number;
@@ -17,6 +33,9 @@ export interface PlayerSnapshot {
   readonly vehicleId: string | null;
   readonly health?: number;
   readonly maxHealth?: number;
+  readonly hp?: number;
+  readonly maxHp?: number;
+  readonly weapon?: 'stud_blaster' | 'scatter_shot' | 'spring_mine';
 }
 
 export interface VehicleSnapshot {
@@ -58,6 +77,7 @@ export interface WorldStateSnapshot {
   readonly ackInputs: Record<string, number>;
   readonly projectiles?: ProjectileSnapshot[];
   readonly damageEvents?: DamageEventSnapshot[];
+  readonly killEvents?: KillEvent[];
   readonly match?: MatchStateSnapshot;
 }
 
@@ -116,3 +136,5 @@ export interface PongResponse {
 
 export type SnapshotCallback = (snapshot: WorldStateSnapshot) => void;
 export type MatchSnapshotCallback = (match: MatchStateSnapshot) => void;
+export type KillEventCallback = (event: KillEvent) => void;
+

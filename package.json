@@ -16,6 +16,7 @@
     "build:backend": "npm --prefix back-workspace run build",
     "build:frontend": "npm --prefix Front-Workspace run build",
     "test:backend": "npm --prefix back-workspace test",
-    "test:frontend": "npm --prefix Front-Workspace test"
+    "test:frontend": "npm --prefix Front-Workspace test",
+    "test": "npm run test:backend && npm run test:frontend"
   }
 }

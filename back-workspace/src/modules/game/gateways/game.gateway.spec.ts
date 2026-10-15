@@ -113,6 +113,20 @@ describe('GameGateway', () => {
       expect(updateResponse.name).toBe('OverdriveLegend');
       expect(gameRoomService.getPlayer('client-named')?.name).toBe('OverdriveLegend');
     });
+
+    it('should register player with selected characterType', async () => {
+      const { socket } = createMockSocketContext('client-char');
+      const payload: JoinGameDto = {
+        playerName: 'BrickHero',
+        characterType: 'funny_indigenous',
+      };
+
+      const response = await gateway.handleJoinGame(socket, payload);
+
+      expect(response.status).toBe('ok');
+      const player = gameRoomService.getPlayer('client-char');
+      expect(player?.characterType).toBe('funny_indigenous');
+    });
   });
 
   describe('playerInput event', () => {
@@ -238,6 +252,20 @@ describe('GameGateway', () => {
       const response = gateway.handleSelectUpgrade(socket, { upgradeId: 'upg-speed-1' });
 
       expect(response.success).toBe(false);
+    });
+
+    it('should handle restartMatch and reset game state', () => {
+      const { serverMock, toSpy } = createMockServer();
+      gateway.afterInit(serverMock);
+
+      const { socket } = createMockSocketContext('client-1');
+      gameRoomService.addPlayer('client-1', 'Player1');
+
+      const response = gateway.handleRestartMatch(socket);
+
+      expect(response.success).toBe(true);
+      expect(response.state).toBe('waiting');
+      expect(toSpy).toHaveBeenCalledWith('game-room');
     });
   });
 });

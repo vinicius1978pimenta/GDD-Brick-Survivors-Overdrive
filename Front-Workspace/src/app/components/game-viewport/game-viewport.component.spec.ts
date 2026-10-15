@@ -799,7 +799,7 @@ describe('GameViewportComponent', () => {
       expect(component.hasJoinedArena()).toBe(true);
       expect(component.localPilotName()).toBe('PilotoMestre');
       expect(connectSpy).toHaveBeenCalled();
-      expect(joinSpy).toHaveBeenCalledWith('PilotoMestre');
+      expect(joinSpy).toHaveBeenCalledWith('PilotoMestre', 'hobo_lego');
 
       fixture.detectChanges();
       const compiled = fixture.nativeElement as HTMLElement;

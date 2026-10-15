@@ -1,9 +1,18 @@
 import { PlayerInputDto } from '../dto/player-input.dto.js';
 import type { WeaponType } from './combat.interface.js';
 
+export type CharacterType =
+  | 'hobo_lego'
+  | 'hillbilly_girl'
+  | 'funny_indigenous'
+  | 'black_shorts';
+
+export const DEFAULT_CHARACTER_TYPE: CharacterType = 'hobo_lego';
+
 export interface ConnectedPlayer {
   id: string;
   name: string;
+  characterType: CharacterType;
   x: number;
   y: number;
   z: number;
@@ -36,12 +45,56 @@ export interface RoomVehicle {
   isDrifting: boolean;
 }
 
+export interface WorldObstacleAABB {
+  readonly id: string;
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minZ: number;
+  readonly maxZ: number;
+}
+
+export type KillReason = 'combat' | 'atropelamento';
+
+export interface KillEvent {
+  readonly killerId: string;
+  readonly killerName: string;
+  readonly victimId: string;
+  readonly victimName: string;
+  readonly reason: KillReason;
+  readonly timestamp: number;
+}
+
 export const ARENA_BOUNDS = {
-  minX: -49,
-  maxX: 49,
-  minZ: -49,
-  maxZ: 49,
+  minX: -68,
+  maxX: 68,
+  minZ: -68,
+  maxZ: 68,
 } as const;
+
+export const CITY_OBSTACLES: WorldObstacleAABB[] = [
+  // Prédio Central Norte (Edifício Comercial de Blocos)
+  { id: 'building_center_north', minX: -10, maxX: 10, minZ: -55, maxZ: -38 },
+  // Centro Logístico Sul
+  { id: 'building_center_south', minX: -10, maxX: 10, minZ: 38, maxZ: 55 },
+  // Complexo Residencial Oeste
+  { id: 'building_west', minX: -55, maxX: -38, minZ: -12, maxZ: 12 },
+  // Complexo Comercial Leste
+  { id: 'building_east', minX: 38, maxX: 55, minZ: -12, maxZ: 12 },
+  // Galpão Industrial Noroeste
+  { id: 'warehouse_nw', minX: -50, maxX: -34, minZ: -45, maxZ: -30 },
+  // Depósito de Carga Nordeste
+  { id: 'cargo_ne', minX: 34, maxX: 50, minZ: -45, maxZ: -30 },
+  // Instalação de Armazenamento Sudoeste
+  { id: 'storage_sw', minX: -50, maxX: -34, minZ: 35, maxZ: 50 },
+  // Subestação de Energia Sudeste
+  { id: 'power_se', minX: 34, maxX: 50, minZ: 35, maxZ: 50 },
+  // Monumento Central da Praça
+  { id: 'monument_center', minX: -3.5, maxX: 3.5, minZ: -18, maxZ: -11 },
+  // Posto Urbano de Combustível
+  { id: 'gas_station', minX: 12, maxX: 20, minZ: -8, maxZ: 2 },
+  // Oficina Mecânica
+  { id: 'repair_garage', minX: -20, maxX: -12, minZ: -8, maxZ: 2 },
+];
 
 export const SIMULATION_CONFIG = {
   tickRateHz: 20,

@@ -4,6 +4,8 @@ import { PlayerInputDto } from '../dto/player-input.dto.js';
 import { WorldStateSnapshotDto } from '../dto/world-state-snapshot.dto.js';
 import {
   ARENA_BOUNDS,
+  CITY_OBSTACLES,
+  DEFAULT_CHARACTER_TYPE,
   HERO_COLLISION_CONFIG,
   PLAYER_CONFIG,
   SIMULATION_CONFIG,
@@ -12,27 +14,35 @@ import {
 } from '../interfaces/index.js';
 import type {
   ActiveProjectile,
+  CharacterType,
   ConnectedPlayer,
   DamageEvent,
   DamageEventSnapshot,
+  KillEvent,
   PlayerShootPayload,
   PlayerSnapshot,
   ProjectileSnapshot,
   RoomVehicle,
   ShootResult,
   VehicleSnapshot,
+  WorldObstacleAABB,
 } from '../interfaces/index.js';
 import { CombatService } from './combat.service.js';
 import { MatchManagerService } from './match-manager.service.js';
 
 export type {
+  CharacterType,
   ConnectedPlayer,
+  KillEvent,
   PlayerSnapshot,
   RoomVehicle,
   VehicleSnapshot,
+  WorldObstacleAABB,
 };
 export {
   ARENA_BOUNDS,
+  CITY_OBSTACLES,
+  DEFAULT_CHARACTER_TYPE,
   HERO_COLLISION_CONFIG,
   PLAYER_CONFIG,
   SIMULATION_CONFIG,
@@ -50,6 +60,7 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
   private readonly players = new Map<string, ConnectedPlayer>();
   private readonly vehicles = new Map<string, RoomVehicle>();
   private readonly snapshotCallbacks: Array<(snapshot: WorldStateSnapshotDto) => void> = [];
+  private pendingDamageEvents: DamageEvent[] = [];
 
   constructor(
     private readonly combatService: CombatService = new CombatService(),
@@ -110,40 +121,93 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
 
   public initDefaultVehicles(): void {
     this.vehicles.clear();
-    const defaultVehicle: RoomVehicle = {
-      id: 'vehicle-alpha',
-      x: 0,
-      y: 0,
-      z: 0,
-      rotationY: 0,
-      currentSpeed: 0,
-      durability: 100,
-      driverId: null,
-      driftVelocityX: 0,
-      driftVelocityZ: 0,
-      isDrifting: false,
-    };
-    this.vehicles.set(defaultVehicle.id, defaultVehicle);
+    const defaultVehicles: RoomVehicle[] = [
+      {
+        id: 'vehicle-alpha',
+        x: 0,
+        y: 0,
+        z: 5,
+        rotationY: 0,
+        currentSpeed: 0,
+        durability: 100,
+        driverId: null,
+        driftVelocityX: 0,
+        driftVelocityZ: 0,
+        isDrifting: false,
+      },
+      {
+        id: 'vehicle-beta',
+        x: -25,
+        y: 0,
+        z: -20,
+        rotationY: 0,
+        currentSpeed: 0,
+        durability: 100,
+        driverId: null,
+        driftVelocityX: 0,
+        driftVelocityZ: 0,
+        isDrifting: false,
+      },
+      {
+        id: 'vehicle-gamma',
+        x: 25,
+        y: 0,
+        z: 20,
+        rotationY: 0,
+        currentSpeed: 0,
+        durability: 100,
+        driverId: null,
+        driftVelocityX: 0,
+        driftVelocityZ: 0,
+        isDrifting: false,
+      },
+      {
+        id: 'vehicle-delta',
+        x: -20,
+        y: 0,
+        z: 25,
+        rotationY: 0,
+        currentSpeed: 0,
+        durability: 100,
+        driverId: null,
+        driftVelocityX: 0,
+        driftVelocityZ: 0,
+        isDrifting: false,
+      },
+    ];
+
+    for (const v of defaultVehicles) {
+      this.vehicles.set(v.id, v);
+    }
   }
 
-  public addPlayer(socketId: string, playerName?: string): ConnectedPlayer {
+  public addPlayer(
+    socketId: string,
+    playerName?: string,
+    characterType?: CharacterType,
+  ): ConnectedPlayer {
     const trimmed = playerName?.trim();
     const defaultName = trimmed && trimmed.length > 0
       ? trimmed
       : `Hero_${socketId.slice(0, 4)}`;
 
+    const selectedCharacter = characterType ?? DEFAULT_CHARACTER_TYPE;
+
     const existingPlayer = this.players.get(socketId);
     if (existingPlayer) {
       existingPlayer.name = defaultName;
+      if (characterType) {
+        existingPlayer.characterType = characterType;
+      }
       this.matchManagerService.registerPlayer(existingPlayer);
       this.logger.log(`Player updated in room: ${existingPlayer.name} (${socketId})`);
       return existingPlayer;
     }
 
-    // Distributed spawn in ring 15m - 35m (spaced out to avoid collision)
+    // Distributed spawn in ring 20m - 45m (spaced out to avoid collision)
     const playerIndex = this.players.size;
     const angle = (playerIndex * ((Math.PI * 2) / 8)) + (Math.PI / 6);
-    const radius = 18.0 + ((playerIndex % 4) * 4.5); // 18m, 22.5m, 27m, 31.5m
+    const radius = 22.0 + ((playerIndex % 5) * 5.0); // 22m, 27m, 32m, 37m, 42m
     const rawX = Math.cos(angle) * radius;
     const rawZ = Math.sin(angle) * radius;
     const spawnX = Number(this.clamp(rawX, ARENA_BOUNDS.minX + 3, ARENA_BOUNDS.maxX - 3).toFixed(2));
@@ -152,6 +216,7 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
     const player: ConnectedPlayer = {
       id: socketId,
       name: defaultName,
+      characterType: selectedCharacter,
       x: spawnX,
       y: 0,
       z: spawnZ,
@@ -170,10 +235,12 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       weapon: 'stud_blaster',
     };
 
+    this.resolveObstacleCollisions(player, HERO_COLLISION_CONFIG.radius);
+
     this.players.set(socketId, player);
     this.matchManagerService.registerPlayer(player);
     this.logger.log(
-      `Player added to room: ${player.name} (${socketId}) at (${player.x}, ${player.z})`,
+      `Player added to room: ${player.name} (${socketId}) [${player.characterType}] at (${player.x}, ${player.z})`,
     );
     return player;
   }
@@ -286,6 +353,9 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       this.vehicles,
     );
 
+    const allDamageEvents = [...damageEvents, ...this.pendingDamageEvents];
+    this.pendingDamageEvents = [];
+
     this.matchManagerService.update(
       dt,
       this.players,
@@ -293,8 +363,8 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       this.combatService,
     );
 
-    const snapshot = this.buildSnapshot(ackInputs, activeProjectiles, damageEvents);
-    this.broadcastSnapshot(snapshot, damageEvents);
+    const snapshot = this.buildSnapshot(ackInputs, activeProjectiles, allDamageEvents);
+    this.broadcastSnapshot(snapshot, allDamageEvents);
     return snapshot;
   }
 
@@ -441,9 +511,13 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       player.isGrounded = true;
     }
 
+    this.resolveObstacleCollisions(player, HERO_COLLISION_CONFIG.radius);
+
     for (const vehicle of this.vehicles.values()) {
       this.resolvePedestrianVehicleCollision(player, vehicle);
     }
+
+    this.resolveObstacleCollisions(player, HERO_COLLISION_CONFIG.radius);
 
     player.x = this.clamp(player.x, ARENA_BOUNDS.minX, ARENA_BOUNDS.maxX);
     player.z = this.clamp(player.z, ARENA_BOUNDS.minZ, ARENA_BOUNDS.maxZ);
@@ -483,9 +557,13 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    this.resolveObstacleCollisions(player, HERO_COLLISION_CONFIG.radius);
+
     for (const vehicle of this.vehicles.values()) {
       this.resolvePedestrianVehicleCollision(player, vehicle);
     }
+
+    this.resolveObstacleCollisions(player, HERO_COLLISION_CONFIG.radius);
 
     player.x = this.clamp(player.x, ARENA_BOUNDS.minX, ARENA_BOUNDS.maxX);
     player.z = this.clamp(player.z, ARENA_BOUNDS.minZ, ARENA_BOUNDS.maxZ);
@@ -585,6 +663,61 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       player.speed = Math.hypot(tangentVelX, tangentVelZ);
     }
 
+    // Vehicular Ramming (Atropelamento)
+    const absSpeed = Math.abs(vehicle.currentSpeed);
+    if (vehicle.driverId && absSpeed >= 3.0) {
+      const damage = Math.min(75, Math.max(10, Math.floor(absSpeed * 3.5)));
+      player.health = Math.max(0, player.health - damage);
+
+      const dirSign = Math.sign(vehicle.currentSpeed) || 1;
+      const forwardDirX = Math.sin(vehicle.rotationY) * dirSign;
+      const forwardDirZ = Math.cos(vehicle.rotationY) * dirSign;
+      const knockbackDist = 3.0 + absSpeed * 0.35;
+
+      player.x += forwardDirX * knockbackDist;
+      player.z += forwardDirZ * knockbackDist;
+      player.y = 1.0;
+      player.vy = 4.5;
+      player.isGrounded = false;
+
+      player.x = this.clamp(player.x, ARENA_BOUNDS.minX, ARENA_BOUNDS.maxX);
+      player.z = this.clamp(player.z, ARENA_BOUNDS.minZ, ARENA_BOUNDS.maxZ);
+
+      const damageEvent: DamageEvent = {
+        targetId: player.id,
+        amount: damage,
+        isVehicle: false,
+        x: player.x,
+        y: player.y,
+        z: player.z,
+        attackerId: vehicle.driverId,
+        weaponType: 'stud_blaster',
+        timestamp: Date.now(),
+        knockbackX: forwardDirX * knockbackDist,
+        knockbackZ: forwardDirZ * knockbackDist,
+      };
+      this.pendingDamageEvents.push(damageEvent);
+
+      if (player.health <= 0) {
+        this.matchManagerService.recordKill(vehicle.driverId, player.id, 'atropelamento');
+        const driver = this.players.get(vehicle.driverId);
+        const killPayload: KillEvent = {
+          killerId: vehicle.driverId,
+          killerName: driver ? driver.name : 'Unknown Driver',
+          victimId: player.id,
+          victimName: player.name,
+          reason: 'atropelamento',
+          timestamp: Date.now(),
+        };
+        if (this.server) {
+          this.server.to('game-room').emit('killEvent', killPayload);
+        }
+        this.logger.log(
+          `Kill via atropelamento: ${killPayload.killerName} ran over ${killPayload.victimName}!`,
+        );
+      }
+    }
+
     return true;
   }
 
@@ -666,6 +799,13 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
     vehicle.x += vx * dt;
     vehicle.z += vz * dt;
 
+    const hitObstacle = this.resolveObstacleCollisions(vehicle, VEHICLE_COLLISION_CONFIG.radius);
+    if (hitObstacle) {
+      vehicle.currentSpeed *= -0.25;
+      vehicle.driftVelocityX = 0;
+      vehicle.driftVelocityZ = 0;
+    }
+
     const bounce = -0.35;
     if (vehicle.x < ARENA_BOUNDS.minX) {
       vehicle.x = ARENA_BOUNDS.minX;
@@ -685,6 +825,12 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       vehicle.z = ARENA_BOUNDS.maxZ;
       vehicle.currentSpeed *= bounce;
       vehicle.driftVelocityZ = 0;
+    }
+
+    for (const pedestrian of this.players.values()) {
+      if (!pedestrian.isDriving && pedestrian.vehicleId !== vehicle.id) {
+        this.resolvePedestrianVehicleCollision(pedestrian, vehicle);
+      }
     }
 
     driver.x = vehicle.x;
@@ -712,6 +858,13 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
 
     vehicle.x += (forwardX * vehicle.currentSpeed + vehicle.driftVelocityX) * dt;
     vehicle.z += (forwardZ * vehicle.currentSpeed + vehicle.driftVelocityZ) * dt;
+
+    const hitObstacle = this.resolveObstacleCollisions(vehicle, VEHICLE_COLLISION_CONFIG.radius);
+    if (hitObstacle) {
+      vehicle.currentSpeed *= -0.25;
+      vehicle.driftVelocityX = 0;
+      vehicle.driftVelocityZ = 0;
+    }
 
     const bounce = -0.35;
     if (vehicle.x < ARENA_BOUNDS.minX) {
@@ -743,6 +896,7 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
     const players: PlayerSnapshot[] = Array.from(this.players.values()).map((p) => ({
       id: p.id,
       name: p.name,
+      characterType: p.characterType ?? DEFAULT_CHARACTER_TYPE,
       x: Number(p.x.toFixed(4)),
       y: Number(p.y.toFixed(4)),
       z: Number(p.z.toFixed(4)),
@@ -815,6 +969,108 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
     for (const callback of this.snapshotCallbacks) {
       callback(snapshot);
     }
+  }
+
+  public resolveObstacleCollisions(
+    entity: { x: number; z: number },
+    radius: number,
+  ): boolean {
+    let collided = false;
+    for (const obs of CITY_OBSTACLES) {
+      const closestX = Math.max(obs.minX, Math.min(obs.maxX, entity.x));
+      const closestZ = Math.max(obs.minZ, Math.min(obs.maxZ, entity.z));
+
+      const diffX = entity.x - closestX;
+      const diffZ = entity.z - closestZ;
+      const distSq = diffX * diffX + diffZ * diffZ;
+
+      if (distSq > 0.000001) {
+        if (distSq < radius * radius) {
+          const dist = Math.sqrt(distSq);
+          const penetration = radius - dist;
+          const normalX = diffX / dist;
+          const normalZ = diffZ / dist;
+          entity.x += normalX * penetration;
+          entity.z += normalZ * penetration;
+          collided = true;
+        }
+      } else {
+        const penLeft = entity.x - obs.minX + radius;
+        const penRight = obs.maxX - entity.x + radius;
+        const penBottom = entity.z - obs.minZ + radius;
+        const penTop = obs.maxZ - entity.z + radius;
+
+        const minPen = Math.min(penLeft, penRight, penBottom, penTop);
+        if (minPen === penLeft) {
+          entity.x = obs.minX - radius;
+        } else if (minPen === penRight) {
+          entity.x = obs.maxX + radius;
+        } else if (minPen === penBottom) {
+          entity.z = obs.minZ - radius;
+        } else {
+          entity.z = obs.maxZ + radius;
+        }
+        collided = true;
+      }
+    }
+    return collided;
+  }
+
+  public restartMatch(): WorldStateSnapshotDto {
+    this.logger.log('Restarting match: resetting FSM, players, vehicles and combat');
+
+    this.matchManagerService.reset();
+    this.combatService.clear();
+    this.pendingDamageEvents = [];
+    for (const v of this.vehicles.values()) {
+      v.driverId = null;
+      v.currentSpeed = 0;
+      v.driftVelocityX = 0;
+      v.driftVelocityZ = 0;
+      v.isDrifting = false;
+    }
+    this.initDefaultVehicles();
+
+    let playerIndex = 0;
+    for (const player of this.players.values()) {
+      player.health = PLAYER_CONFIG.maxHealth;
+      player.maxHealth = PLAYER_CONFIG.maxHealth;
+      player.isDriving = false;
+      player.vehicleId = null;
+      player.speed = 0;
+      player.vx = 0;
+      player.vy = 0;
+      player.vz = 0;
+      player.isGrounded = true;
+      player.pendingInputs = [];
+
+      const angle = (playerIndex * ((Math.PI * 2) / 8)) + (Math.PI / 6);
+      const radius = 22.0 + ((playerIndex % 5) * 5.0);
+      const rawX = Math.cos(angle) * radius;
+      const rawZ = Math.sin(angle) * radius;
+      player.x = Number(this.clamp(rawX, ARENA_BOUNDS.minX + 3, ARENA_BOUNDS.maxX - 3).toFixed(2));
+      player.y = 0;
+      player.z = Number(this.clamp(rawZ, ARENA_BOUNDS.minZ + 3, ARENA_BOUNDS.maxZ - 3).toFixed(2));
+      player.rotationY = angle;
+
+      this.resolveObstacleCollisions(player, HERO_COLLISION_CONFIG.radius);
+      this.matchManagerService.registerPlayer(player);
+      playerIndex++;
+    }
+
+    const ackInputs: Record<string, number> = {};
+    for (const player of this.players.values()) {
+      ackInputs[player.id] = player.lastProcessedSeq;
+    }
+
+    const snapshot = this.buildSnapshot(ackInputs, [], []);
+    this.broadcastSnapshot(snapshot, []);
+
+    if (this.server) {
+      this.server.to('game-room').emit('matchSnapshot', this.matchManagerService.getSnapshot());
+    }
+
+    return snapshot;
   }
 
   private clamp(value: number, min: number, max: number): number {

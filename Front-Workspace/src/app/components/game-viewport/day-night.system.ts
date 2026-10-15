@@ -8,7 +8,7 @@ import { DayNightCycleState, TimeOfDayPhase } from './interfaces/game-viewport.i
  */
 export class DayNightSystem {
   public elapsedTime = 0;
-  public cycleDuration = 90; // 90 segundos para uma rotação completa de 24h
+  public cycleDuration = 180; // 180 segundos (3 minutos) para rotação suave e completa
 
   private readonly starField: THREE.Points;
   public heroFlashlight: THREE.SpotLight | null = null;
@@ -20,11 +20,18 @@ export class DayNightSystem {
     private readonly sunLight: THREE.DirectionalLight,
     private readonly ambientLight: THREE.AmbientLight,
     private readonly hemiLight: THREE.HemisphereLight,
-    cycleDuration = 90,
+    cycleDuration = 180,
   ) {
     this.cycleDuration = cycleDuration;
     this.starField = this.createStarField();
     this.scene.add(this.starField);
+  }
+
+  /**
+   * Força um instante específico do ciclo astronômico (0 = meio-dia, 0.5 = meia-noite).
+   */
+  public setTimeOfDay(fraction: number): void {
+    this.elapsedTime = (fraction % 1) * this.cycleDuration;
   }
 
   /**
@@ -35,7 +42,7 @@ export class DayNightSystem {
     const timeOfDay = (this.elapsedTime % this.cycleDuration) / this.cycleDuration;
     const sunAngle = timeOfDay * Math.PI * 2;
 
-    const orbitRadius = 65;
+    const orbitRadius = 90;
     const sunX = Math.cos(sunAngle) * orbitRadius;
     const sunY = Math.sin(sunAngle) * orbitRadius;
     const sunZ = Math.sin(sunAngle * 0.4) * (orbitRadius * 0.6);
