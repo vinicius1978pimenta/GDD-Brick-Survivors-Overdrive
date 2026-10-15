@@ -5,11 +5,11 @@ import { PlayerInputDto } from '../dto/player-input.dto.js';
 import { GameGateway } from './game.gateway.js';
 import { GameRoomService } from '../services/game-room.service.js';
 
-interface MockSocketContext {
+type MockSocketContext = {
   socket: Socket;
   emitMock: ReturnType<typeof vi.fn>;
   joinMock: ReturnType<typeof vi.fn>;
-}
+};
 
 describe('GameGateway', () => {
   let gateway: GameGateway;

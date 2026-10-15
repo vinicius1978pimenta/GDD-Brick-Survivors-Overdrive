@@ -1,4 +1,4 @@
-import { PlayerInputDto } from "../dto/player-input.dto.js";
+import { PlayerInputDto } from '../dto/player-input.dto.js';
 
 export interface ConnectedPlayer {
   id: string;

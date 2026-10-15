@@ -15,19 +15,7 @@ import { isPlatformBrowser } from '@angular/common';
 import * as THREE from 'three';
 import { GameWorld } from '../../core/engine';
 import { NetworkService, WorldStateSnapshot } from '../../core/network';
-
-interface RemotePlayerVisual {
-  mesh: THREE.Group;
-  currentX: number;
-  currentY: number;
-  currentZ: number;
-  currentRotationY: number;
-  targetX: number;
-  targetY: number;
-  targetZ: number;
-  targetRotationY: number;
-  name: string;
-}
+import { RemotePlayerVisual } from './interfaces/game-viewport.interface';
 
 @Component({
   selector: 'app-game-viewport',

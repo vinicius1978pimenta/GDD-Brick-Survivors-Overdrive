@@ -1,26 +1,6 @@
-export interface PlayerSnapshot {
-  readonly id: string;
-  readonly name: string;
-  readonly x: number;
-  readonly y: number;
-  readonly z: number;
-  readonly rotationY: number;
-  readonly speed: number;
-  readonly isDriving: boolean;
-  readonly isGrounded: boolean;
-  readonly vehicleId: string | null;
-}
+import type { PlayerSnapshot, VehicleSnapshot } from '../interfaces/index.js';
 
-export interface VehicleSnapshot {
-  readonly id: string;
-  readonly x: number;
-  readonly y: number;
-  readonly z: number;
-  readonly rotationY: number;
-  readonly speed: number;
-  readonly durability: number;
-  readonly driverId: string | null;
-}
+export type { PlayerSnapshot, VehicleSnapshot };
 
 export class WorldStateSnapshotDto {
   readonly tick: number;

@@ -1,11 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlayerInputDto } from '../dto/player-input.dto.js';
 import { WorldStateSnapshotDto } from '../dto/world-state-snapshot.dto.js';
-import {
-  ARENA_BOUNDS,
-  GameRoomService,
-  SIMULATION_CONFIG,
-} from './game-room.service.js';
+import { ARENA_BOUNDS, SIMULATION_CONFIG } from '../interfaces/index.js';
+import { GameRoomService } from './game-room.service.js';
 
 describe('GameRoomService', () => {
   let service: GameRoomService;

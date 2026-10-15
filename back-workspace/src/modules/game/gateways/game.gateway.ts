@@ -13,23 +13,13 @@ import { Server, Socket } from 'socket.io';
 import { JoinGameDto } from '../dto/join-game.dto.js';
 import { PlayerInputDto } from '../dto/player-input.dto.js';
 import { GameRoomService } from '../services/game-room.service.js';
+import type {
+  JoinGameResponse,
+  PingPayload,
+  PongResponse,
+} from '../interfaces/index.js';
 
-export interface PingPayload {
-  clientTimestamp?: number;
-  timestamp?: number;
-}
-
-export interface PongResponse {
-  clientTimestamp: number;
-  serverTimestamp: number;
-}
-
-export interface JoinGameResponse {
-  status: 'ok';
-  playerId: string;
-  name: string;
-  tick: number;
-}
+export type { JoinGameResponse, PingPayload, PongResponse };
 
 @WebSocketGateway({
   cors: {

@@ -1,28 +1,31 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Server } from 'socket.io';
 import { PlayerInputDto } from '../dto/player-input.dto.js';
-import {PlayerSnapshot,
-  VehicleSnapshot,
-  WorldStateSnapshotDto,
-} from '../dto/world-state-snapshot.dto.js';
+import { WorldStateSnapshotDto } from '../dto/world-state-snapshot.dto.js';
 import {
-  ConnectedPlayer,
-  RoomVehicle,
   ARENA_BOUNDS,
+  PLAYER_CONFIG,
   SIMULATION_CONFIG,
   VEHICLE_CONFIG,
-  PLAYER_CONFIG,
-} from './Interface-game-room.js';
+} from '../interfaces/index.js';
+import type {
+  ConnectedPlayer,
+  PlayerSnapshot,
+  RoomVehicle,
+  VehicleSnapshot,
+} from '../interfaces/index.js';
 
 export type {
   ConnectedPlayer,
+  PlayerSnapshot,
   RoomVehicle,
+  VehicleSnapshot,
 };
 export {
   ARENA_BOUNDS,
+  PLAYER_CONFIG,
   SIMULATION_CONFIG,
   VEHICLE_CONFIG,
-  PLAYER_CONFIG,
 };
 
 

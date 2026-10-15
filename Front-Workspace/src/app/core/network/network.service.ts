@@ -5,10 +5,9 @@ import {
   JoinGameResponse,
   PlayerInputPayload,
   PongResponse,
+  SnapshotCallback,
   WorldStateSnapshot,
-} from './network.types';
-
-export type SnapshotCallback = (snapshot: WorldStateSnapshot) => void;
+} from './types/network.types';
 
 @Injectable({
   providedIn: 'root',
