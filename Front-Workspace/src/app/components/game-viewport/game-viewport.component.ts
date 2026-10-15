@@ -1556,6 +1556,64 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.camera.lookAt(this.lookAtX, targetLookAtY, this.lookAtZ);
   }
 
+  /**
+   * Atualiza a mira 3D (aimTarget3D) e a orientação do herói a partir do raycaster da câmera.
+   * Quando o mouse aponta para o chão perto dos pés ou atrás do herói, o alvo é projetado
+   * no chão à frente do personagem, impedindo inversão de 180° e travamento ao andar com W.
+   */
+  private updateAimTarget(): void {
+    if (!this.camera) {
+      return;
+    }
+
+    this.raycaster.setFromCamera(this.mouseNDC, this.camera);
+    const hitPoint = new THREE.Vector3();
+    const hasGroundHit =
+      this.raycaster.ray.direction.y < -0.02 &&
+      Boolean(this.raycaster.ray.intersectPlane(this.groundPlane, hitPoint)) &&
+      hitPoint.distanceTo(this.camera.position) < 100;
+
+    const rayDirX = this.raycaster.ray.direction.x;
+    const rayDirZ = this.raycaster.ray.direction.z;
+    const rayHorizLen = Math.hypot(rayDirX, rayDirZ) || 0.001;
+    const normDirX = rayDirX / rayHorizLen;
+    const normDirZ = rayDirZ / rayHorizLen;
+
+    const isDriving = this.world.isDriving();
+    const refX = isDriving ? this.world.vehicleTransform.x : this.world.heroTransform.x;
+    const refZ = isDriving ? this.world.vehicleTransform.z : this.world.heroTransform.z;
+
+    if (hasGroundHit) {
+      const toHitX = hitPoint.x - refX;
+      const toHitZ = hitPoint.z - refZ;
+      const forwardDist = toHitX * normDirX + toHitZ * normDirZ;
+
+      // Se o impacto no chão estiver a pelo menos 2.0m à frente do personagem
+      if (forwardDist >= 2.0) {
+        this.aimTarget3D.copy(hitPoint);
+      } else {
+        // Se estiver muito próximo dos pés ou atrás do herói, projeta no chão à frente
+        this.aimTarget3D.set(
+          refX + normDirX * 3.5,
+          0,
+          refZ + normDirZ * 3.5,
+        );
+      }
+    } else {
+      // Ao apontar para o horizonte ou para o céu, projeta o ponto 3D no espaço a 50 unidades
+      this.raycaster.ray.at(50, this.aimTarget3D);
+    }
+
+    // Se a pé, orienta a direção do herói sempre na direção em que o jogador está mirando
+    if (!isDriving) {
+      const aimAngle = Math.atan2(normDirX, normDirZ);
+      this.world.heroTransform.rotationY = aimAngle;
+      if (this.heroGroup) {
+        this.heroGroup.rotation.y = aimAngle;
+      }
+    }
+  }
+
   private setupResizeObserver(): void {
     const container = this.containerRef?.nativeElement;
     if (!container || typeof ResizeObserver === 'undefined') {
@@ -1703,31 +1761,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       this.mouseNDC.x = ((event.clientX - rect.left) / width) * 2 - 1;
       this.mouseNDC.y = -((event.clientY - rect.top) / height) * 2 + 1;
 
-      this.raycaster.setFromCamera(this.mouseNDC, this.camera);
-      const hitPoint = new THREE.Vector3();
-      const hasGroundHit =
-        this.raycaster.ray.direction.y < -0.02 &&
-        Boolean(this.raycaster.ray.intersectPlane(this.groundPlane, hitPoint)) &&
-        hitPoint.distanceTo(this.camera.position) < 100;
-
-      if (hasGroundHit) {
-        this.aimTarget3D.copy(hitPoint);
-      } else {
-        // Ao apontar para o horizonte ou para o céu, projeta o ponto 3D no espaço a 50 unidades
-        this.raycaster.ray.at(50, this.aimTarget3D);
-      }
-
-      // Se a pé, orienta instantaneamente a rotação do herói na direção da mira do mouse
-      if (!this.world.isDriving()) {
-        const dx = this.aimTarget3D.x - this.world.heroTransform.x;
-        const dz = this.aimTarget3D.z - this.world.heroTransform.z;
-        if (Math.hypot(dx, dz) > 0.15) {
-          this.world.heroTransform.rotationY = Math.atan2(dx, dz);
-          if (this.heroGroup) {
-            this.heroGroup.rotation.y = this.world.heroTransform.rotationY;
-          }
-        }
-      }
+      this.updateAimTarget();
     }
 
     // 3. Rotação orbital suave da câmera
@@ -1814,10 +1848,14 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
 
     // Se a pé, orienta a direção do herói para onde o mouse aponta na arena (twin-stick / strafe)
     if (!this.world.isDriving()) {
-      const dx = this.aimTarget3D.x - this.world.heroTransform.x;
-      const dz = this.aimTarget3D.z - this.world.heroTransform.z;
-      if (Math.hypot(dx, dz) > 0.15) {
-        this.world.heroTransform.rotationY = Math.atan2(dx, dz);
+      if (this.camera) {
+        this.updateAimTarget();
+      } else {
+        const dx = this.aimTarget3D.x - this.world.heroTransform.x;
+        const dz = this.aimTarget3D.z - this.world.heroTransform.z;
+        if (Math.hypot(dx, dz) > 0.15) {
+          this.world.heroTransform.rotationY = Math.atan2(dx, dz);
+        }
       }
     }
 

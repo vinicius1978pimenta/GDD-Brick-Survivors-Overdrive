@@ -577,5 +577,25 @@ describe('GameViewportComponent', () => {
     expect(component['targetRadius']).toBe(8.0);
     expect(component['lookAtY']).toBeCloseTo(1.45, 1);
   });
+
+  it('não deve travar nem oscilar a rotação em 180 graus ao andar para frente com W mesmo com mira próxima no chão', () => {
+    fixture.detectChanges();
+    component['wasDriving'] = false;
+    component.world.vehicleComponent.driverEntityId = null;
+
+    component['aimTarget3D'].set(0, 0, 2.0);
+    component.world.heroTransform.x = 0;
+    component.world.heroTransform.z = 0;
+    component.world.setInput({ forward: true });
+
+    // Simula 25 frames contínuos de caminhada para frente
+    for (let i = 0; i < 25; i++) {
+      component['updateGameLogic'](0.016, i * 0.016);
+    }
+
+    // Deve progredir em +Z de forma fluida sem inverter a rotação
+    expect(component.world.heroTransform.z).toBeGreaterThan(0.5);
+    expect(component.world.heroTransform.rotationY).toBeCloseTo(0, 1);
+  });
 });
 
