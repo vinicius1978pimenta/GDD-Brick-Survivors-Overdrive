@@ -98,6 +98,21 @@ describe('GameGateway', () => {
       expect(response.status).toBe('ok');
       expect(response.name).toBe('Hero_sock');
     });
+
+    it('should register and maintain playerName passed in payload when joining', async () => {
+      const { socket } = createMockSocketContext('client-named');
+      const payload: JoinGameDto = { playerName: 'OverdriveMaster' };
+
+      const response = await gateway.handleJoinGame(socket, payload);
+
+      expect(response.name).toBe('OverdriveMaster');
+      expect(gameRoomService.getPlayer('client-named')?.name).toBe('OverdriveMaster');
+
+      const updatedPayload: JoinGameDto = { playerName: 'OverdriveLegend' };
+      const updateResponse = await gateway.handleJoinGame(socket, updatedPayload);
+      expect(updateResponse.name).toBe('OverdriveLegend');
+      expect(gameRoomService.getPlayer('client-named')?.name).toBe('OverdriveLegend');
+    });
   });
 
   describe('playerInput event', () => {

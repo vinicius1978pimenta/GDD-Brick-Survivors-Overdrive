@@ -64,10 +64,10 @@ export interface ArenaBounds {
 }
 
 export const DEFAULT_ARENA_BOUNDS: ArenaBounds = {
-  minX: -19,
-  maxX: 19,
-  minZ: -19,
-  maxZ: 19,
+  minX: -48.5,
+  maxX: 48.5,
+  minZ: -48.5,
+  maxZ: 48.5,
 };
 
 export const FIXED_TIMESTEP = 1 / 60; // 60Hz (~0.0166667s)

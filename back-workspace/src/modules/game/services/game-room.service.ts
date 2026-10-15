@@ -127,21 +127,36 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
   }
 
   public addPlayer(socketId: string, playerName?: string): ConnectedPlayer {
-    const defaultName = playerName && playerName.trim().length > 0
-      ? playerName.trim()
+    const trimmed = playerName?.trim();
+    const defaultName = trimmed && trimmed.length > 0
+      ? trimmed
       : `Hero_${socketId.slice(0, 4)}`;
 
+    const existingPlayer = this.players.get(socketId);
+    if (existingPlayer) {
+      existingPlayer.name = defaultName;
+      this.matchManagerService.registerPlayer(existingPlayer);
+      this.logger.log(`Player updated in room: ${existingPlayer.name} (${socketId})`);
+      return existingPlayer;
+    }
+
+    // Distributed spawn in ring 15m - 35m (spaced out to avoid collision)
     const playerIndex = this.players.size;
-    const initialZ = -4 - (playerIndex * 2);
+    const angle = (playerIndex * ((Math.PI * 2) / 8)) + (Math.PI / 6);
+    const radius = 18.0 + ((playerIndex % 4) * 4.5); // 18m, 22.5m, 27m, 31.5m
+    const rawX = Math.cos(angle) * radius;
+    const rawZ = Math.sin(angle) * radius;
+    const spawnX = Number(this.clamp(rawX, ARENA_BOUNDS.minX + 3, ARENA_BOUNDS.maxX - 3).toFixed(2));
+    const spawnZ = Number(this.clamp(rawZ, ARENA_BOUNDS.minZ + 3, ARENA_BOUNDS.maxZ - 3).toFixed(2));
 
     const player: ConnectedPlayer = {
       id: socketId,
       name: defaultName,
-      x: 0,
+      x: spawnX,
       y: 0,
-      z: Math.max(ARENA_BOUNDS.minZ + 1, initialZ),
+      z: spawnZ,
       vy: 0,
-      rotationY: 0,
+      rotationY: angle,
       speed: 0,
       isDriving: false,
       isGrounded: true,
@@ -150,11 +165,14 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       pendingInputs: [],
       health: PLAYER_CONFIG.maxHealth,
       maxHealth: PLAYER_CONFIG.maxHealth,
+      weapon: 'stud_blaster',
     };
 
     this.players.set(socketId, player);
     this.matchManagerService.registerPlayer(player);
-    this.logger.log(`Player added to room: ${player.name} (${socketId})`);
+    this.logger.log(
+      `Player added to room: ${player.name} (${socketId}) at (${player.x}, ${player.z})`,
+    );
     return player;
   }
 
@@ -202,6 +220,7 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
         projectilesSpawned: 0,
       };
     }
+    player.weapon = payload.weaponType;
     return this.combatService.handleShoot(playerId, payload);
   }
 
@@ -703,6 +722,9 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       vehicleId: p.vehicleId,
       health: p.health,
       maxHealth: p.maxHealth,
+      hp: p.health,
+      maxHp: p.maxHealth,
+      weapon: p.weapon ?? 'stud_blaster',
     }));
 
     const vehicles: VehicleSnapshot[] = Array.from(this.vehicles.values()).map((v) => ({

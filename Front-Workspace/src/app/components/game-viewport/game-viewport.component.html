@@ -19,11 +19,47 @@
     }
   </div>
 
+  <!-- Player Overhead Tags (Nome e Barra de HP Flutuante no Mundo 3D) -->
+  <div class="overhead-tags-container" aria-hidden="true">
+    @for (tag of overheadTags(); track tag.id) {
+      @if (tag.visible) {
+        <div
+          class="player-overhead-tag"
+          [class.tag-local]="tag.isLocal"
+          [style.left.px]="tag.screenX"
+          [style.top.px]="tag.screenY"
+        >
+          <div class="overhead-name-pill">
+            @if (tag.isLocal) {
+              <iconify-icon icon="mdi:star" class="local-star-icon"></iconify-icon>
+            }
+            <span class="overhead-player-name">{{ tag.name }}</span>
+          </div>
+          <div class="overhead-hp-bar">
+            <div
+              class="overhead-hp-fill"
+              [style.width.%]="tag.healthPercent"
+              [style.background-color]="tag.color"
+            ></div>
+          </div>
+        </div>
+      }
+    }
+  </div>
+
   <!-- Top Left: Brand & Status -->
   <div class="hud-top-left" aria-hidden="true">
     <div class="badge-brand">
       <iconify-icon icon="mdi:toy-brick" class="stud-dot"></iconify-icon>
       <span>Brick Survivors: Overdrive</span>
+    </div>
+
+    <!-- Badge Indicador do Ciclo Dia / Noite -->
+    <div class="badge-daynight" [class.phase-night]="isNightMode()">
+      <iconify-icon [icon]="isNightMode() ? 'mdi:weather-night' : timeOfDayPhase() === 'sunset' || timeOfDayPhase() === 'sunrise' ? 'mdi:weather-sunset' : 'mdi:white-balance-sunny'"></iconify-icon>
+      <span class="daynight-text">
+        {{ isNightMode() ? 'NOITE' : timeOfDayPhase() === 'sunset' ? 'ENTARDECER' : timeOfDayPhase() === 'sunrise' ? 'AMANHECER' : 'DIA' }}
+      </span>
     </div>
 
     <!-- Badge de Rede Multiplayer com Iconify -->
@@ -37,6 +73,25 @@
       @if (networkService.isConnected()) {
         <span class="network-ping">{{ networkService.pingMs() }} ms</span>
       }
+    </div>
+
+    <!-- Card de Vida do Personagem (HP do Piloto Local) -->
+    <div
+      class="pilot-hp-card"
+      [class.hp-low]="pilotHealth() < 25"
+      [class.hp-mid]="pilotHealth() >= 25 && pilotHealth() < 60"
+      aria-label="Pontos de Vida do Piloto"
+    >
+      <div class="hp-header">
+        <div class="hp-label-group">
+          <iconify-icon icon="mdi:heart-pulse" class="hp-icon"></iconify-icon>
+          <span class="pilot-display-name">{{ localPilotName() }}</span>
+        </div>
+        <span class="hp-numeric-val">{{ pilotHealth() }} / {{ pilotMaxHealth() }} HP</span>
+      </div>
+      <div class="hp-bar-track">
+        <div class="hp-bar-fill" [style.width.%]="(pilotHealth() / pilotMaxHealth()) * 100"></div>
+      </div>
     </div>
 
     <div class="mode-badge" [class.mode-driving]="isDriving()">
@@ -377,6 +432,57 @@
           <iconify-icon icon="mdi:restart"></iconify-icon>
           <span>JOGAR NOVAMENTE</span>
         </button>
+      </div>
+    </div>
+  }
+
+  <!-- FASE 7.2: Tela Inicial de Entrada / Lobby (Nome do Jogador & Suporte Multi-Navegador) -->
+  @if (!hasJoinedArena()) {
+    <div class="arena-entrance-backdrop" role="dialog" aria-modal="true" aria-label="Entrar na Arena">
+      <div class="entrance-card">
+        <div class="entrance-badge">
+          <iconify-icon icon="mdi:toy-brick" class="entrance-stud-icon"></iconify-icon>
+          <span>BRICK SURVIVORS: OVERDRIVE</span>
+        </div>
+
+        <h1 class="entrance-title">ENTRE NA ARENA DE BLOCOS</h1>
+        <p class="entrance-desc">
+          Digite o nome do seu piloto para conectar em tempo real e disputar partidas cooperativas e PvP na arena 100x100!
+        </p>
+
+        <form class="entrance-form" (submit)="$event.preventDefault(); enterArena()">
+          <div class="input-field-group">
+            <label for="pilotNameInput" class="input-label">NOME DO PILOTO</label>
+            <div class="input-wrapper">
+              <iconify-icon icon="mdi:account-badge" class="input-icon"></iconify-icon>
+              <input
+                id="pilotNameInput"
+                type="text"
+                class="pilot-name-input"
+                [value]="pilotNameInput()"
+                (input)="onPilotNameChange($event)"
+                placeholder="Ex: BrickMaster99"
+                maxlength="16"
+                autofocus
+                autocomplete="off"
+              />
+            </div>
+            @if (nameValidationError()) {
+              <span class="validation-error-text">{{ nameValidationError() }}</span>
+            }
+          </div>
+
+          <button type="submit" class="btn-enter-arena">
+            <iconify-icon icon="mdi:play" class="btn-play-icon"></iconify-icon>
+            <span>ENTRAR NA ARENA</span>
+          </button>
+        </form>
+
+        <div class="entrance-footer-tips">
+          <span class="tip-pill"><iconify-icon icon="mdi:earth"></iconify-icon> Multi-Navegador</span>
+          <span class="tip-pill"><iconify-icon icon="mdi:weather-night"></iconify-icon> Ciclo Dia e Noite</span>
+          <span class="tip-pill"><iconify-icon icon="mdi:map-marker-radius"></iconify-icon> Arena 100x100</span>
+        </div>
       </div>
     </div>
   }

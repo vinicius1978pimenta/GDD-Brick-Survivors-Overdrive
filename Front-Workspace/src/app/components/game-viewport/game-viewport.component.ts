@@ -8,6 +8,7 @@ import {
   Inject,
   NgZone,
   OnDestroy,
+  OnInit,
   PLATFORM_ID,
   signal,
   ViewChild,
@@ -23,7 +24,15 @@ import {
   WeaponType,
 } from '../../core/engine';
 import { NetworkService, WorldStateSnapshot } from '../../core/network';
-import { FloatingCombatText, RemotePlayerVisual } from './interfaces/game-viewport.interface';
+import {
+  FloatingCombatText,
+  PlayerOverheadTag,
+  RemotePlayerVisual,
+  TimeOfDayPhase,
+} from './interfaces/game-viewport.interface';
+import { ScenarioBuildResult } from './interfaces/scenario.interface';
+import { ScenarioFactory } from './scenario.factory';
+import { DayNightSystem } from './day-night.system';
 import {
   EnemyEntity,
   EnemyType,
@@ -43,7 +52,7 @@ import { createEnemyMesh } from './enemy-mesh.factory';
   changeDetection: ChangeDetectionStrategy.OnPush,
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
-export class GameViewportComponent implements AfterViewInit, OnDestroy {
+export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('viewportContainer', { static: true })
   public containerRef!: ElementRef<HTMLDivElement>;
 
@@ -90,8 +99,29 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   public readonly playerScores = signal<PlayerMatchScore[]>([]);
   public readonly isPlayerReady = signal(false);
 
+  // Tela Inicial de Entrada / Lobby (Nome do Jogador & Suporte Multi-Navegador)
+  public readonly hasJoinedArena = signal(false);
+  public readonly pilotNameInput = signal('');
+  public readonly nameValidationError = signal<string | null>(null);
+  public readonly localPilotName = signal('Piloto');
+
+  // Barra de Vida (HP do Piloto e Overhead Tags Flutuantes)
+  public readonly pilotHealth = signal(100);
+  public readonly pilotMaxHealth = signal(100);
+  public readonly overheadTags = signal<PlayerOverheadTag[]>([]);
+
+  // Sistema de Ciclo Dia e Noite Dinâmico
+  public readonly timeOfDayPhase = signal<TimeOfDayPhase>('day');
+  public readonly isNightMode = signal(false);
+
   // Instância do mundo de física e regras de jogo (100% desacoplado de Three.js)
   public readonly world = new GameWorld();
+
+  public currentScenario: ScenarioBuildResult | null = null;
+  public dayNightSystem: DayNightSystem | null = null;
+  private dirLight: THREE.DirectionalLight | null = null;
+  private ambientLight: THREE.AmbientLight | null = null;
+  private hemiLight: THREE.HemisphereLight | null = null;
 
   private readonly enemyVisuals = new Map<string, EnemyVisual>();
   private readonly raycaster = new THREE.Raycaster();
@@ -163,6 +193,17 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     public readonly networkService: NetworkService,
   ) {}
 
+  public ngOnInit(): void {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('bso_pilot_name');
+        if (saved && saved.trim().length >= 2) {
+          this.pilotNameInput.set(saved.trim());
+        }
+      } catch {}
+    }
+  }
+
   public ngAfterViewInit(): void {
     if (!isPlatformBrowser(this.platformId)) {
       return;
@@ -173,13 +214,42 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.attachEventListeners();
     this.startGameLoop();
 
-    // Inicia comunicação de rede com o Gateway NestJS
-    this.networkService.connect();
-    this.networkService.joinGame('Hero Player');
-
     this.unsubscribeSnapshots = this.networkService.onSnapshot((snapshot) => {
       this.handleServerSnapshot(snapshot);
     });
+  }
+
+  public onPilotNameChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.pilotNameInput.set(input.value);
+    if (this.nameValidationError()) {
+      this.nameValidationError.set(null);
+    }
+  }
+
+  public enterArena(customName?: string): void {
+    const rawName = (customName !== undefined ? customName : this.pilotNameInput()).trim();
+    if (rawName.length < 2 || rawName.length > 16) {
+      this.nameValidationError.set('O nome do piloto deve ter entre 2 e 16 caracteres.');
+      return;
+    }
+
+    this.nameValidationError.set(null);
+    this.localPilotName.set(rawName);
+    this.hasJoinedArena.set(true);
+
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('bso_pilot_name', rawName);
+      } catch {}
+    }
+
+    this.networkService.connect();
+    this.networkService.joinGame(rawName);
+
+    if (this.world.matchState.scores[0]) {
+      this.world.matchState.scores[0].name = rawName;
+    }
   }
 
   public ngOnDestroy(): void {
@@ -242,7 +312,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x101622);
-    this.scene.fog = new THREE.FogExp2(0x101622, 0.022);
+    this.scene.fog = new THREE.FogExp2(0x101622, 0.008);
 
     this.camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 1000);
     this.targetTheta = this.world.heroTransform.rotationY + Math.PI;
@@ -257,7 +327,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.updateCameraPosition();
 
     this.setupLighting();
-    this.createToyArena();
+    this.setScenario(this.gameMode());
     this.createBlockHero();
     this.createBlockBuggy();
   }
@@ -281,71 +351,65 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Configura iluminação com Ambient suave e Directional com sombras.
+   * Configura iluminação com Ambient suave, Directional com sombras e DayNightSystem.
    */
   private setupLighting(): void {
     if (!this.scene) return;
 
-    const ambientLight = new THREE.AmbientLight(0xdde6ed, 0.55);
-    this.scene.add(ambientLight);
+    this.ambientLight = new THREE.AmbientLight(0xdde6ed, 0.55);
+    this.scene.add(this.ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0x60a5fa, 0x1e293b, 0.45);
-    hemiLight.position.set(0, 30, 0);
-    this.scene.add(hemiLight);
+    this.hemiLight = new THREE.HemisphereLight(0x60a5fa, 0x1e293b, 0.45);
+    this.hemiLight.position.set(0, 30, 0);
+    this.scene.add(this.hemiLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.25);
-    dirLight.position.set(12, 18, 10);
-    dirLight.castShadow = true;
+    this.dirLight = new THREE.DirectionalLight(0xfffaed, 1.35);
+    this.dirLight.position.set(25, 45, 20);
+    this.dirLight.castShadow = true;
 
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 60;
+    this.dirLight.shadow.mapSize.width = 2048;
+    this.dirLight.shadow.mapSize.height = 2048;
+    this.dirLight.shadow.camera.near = 0.5;
+    this.dirLight.shadow.camera.far = 140;
 
-    const shadowExtent = 22;
-    dirLight.shadow.camera.left = -shadowExtent;
-    dirLight.shadow.camera.right = shadowExtent;
-    dirLight.shadow.camera.top = shadowExtent;
-    dirLight.shadow.camera.bottom = -shadowExtent;
-    dirLight.shadow.bias = -0.0004;
+    const shadowExtent = 55;
+    this.dirLight.shadow.camera.left = -shadowExtent;
+    this.dirLight.shadow.camera.right = shadowExtent;
+    this.dirLight.shadow.camera.top = shadowExtent;
+    this.dirLight.shadow.camera.bottom = -shadowExtent;
+    this.dirLight.shadow.bias = -0.0004;
 
-    this.scene.add(dirLight);
+    this.scene.add(this.dirLight);
 
-    const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.4);
-    rimLight.position.set(-10, 8, -12);
-    this.scene.add(rimLight);
+    // Sistema de Ciclo Dinâmico Dia e Noite
+    this.dayNightSystem = new DayNightSystem(
+      this.scene,
+      this.dirLight,
+      this.ambientLight,
+      this.hemiLight,
+      90,
+    );
   }
 
   /**
-   * Cria piso de arena com grid e textura de blocos com pinos.
+   * Constrói e alterna o cenário temático 3D (Outpost Industrial ou Neon Cyber Arena) no mapa 100x100.
    */
-  private createToyArena(): void {
+  public setScenario(mode: GameModeType): void {
     if (!this.scene) return;
 
-    this.studTexture = this.generateStudTexture();
-
-    const floorGeometry = new THREE.BoxGeometry(40, 0.8, 40);
-    const floorMaterial = new THREE.MeshStandardMaterial({
-      color: 0x1f2937,
-      map: this.studTexture || undefined,
-      roughness: 0.38,
-      metalness: 0.15,
-    });
-
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-    floor.position.set(0, -0.4, 0);
-    floor.receiveShadow = true;
-    this.scene.add(floor);
-
-    const gridHelper = new THREE.GridHelper(40, 20, 0xfcd116, 0x3b82f6);
-    gridHelper.position.set(0, 0.01, 0);
-    if (gridHelper.material instanceof THREE.Material) {
-      gridHelper.material.opacity = 0.25;
-      gridHelper.material.transparent = true;
+    if (this.currentScenario) {
+      ScenarioFactory.disposeScenario(this.currentScenario);
+      this.scene.remove(this.currentScenario.group);
+      this.currentScenario = null;
     }
-    this.scene.add(gridHelper);
 
-    this.createArenaBorders();
+    if (!this.studTexture) {
+      this.studTexture = this.generateStudTexture();
+    }
+
+    const theme = mode === 'pvp_deathmatch' ? 'neon_cyber' : 'industrial_outpost';
+    this.currentScenario = ScenarioFactory.buildScenario(theme, this.studTexture);
+    this.scene.add(this.currentScenario.group);
   }
 
   private generateStudTexture(): THREE.CanvasTexture | null {
@@ -397,45 +461,10 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       const texture = new THREE.CanvasTexture(canvas);
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(10, 10);
+      texture.repeat.set(25, 25);
       return texture;
     } catch {
       return null;
-    }
-  }
-
-  private createArenaBorders(): void {
-    if (!this.scene) return;
-
-    const borderMatYellow = new THREE.MeshStandardMaterial({
-      color: 0xfcd116,
-      roughness: 0.3,
-      metalness: 0.1,
-    });
-    const borderMatRed = new THREE.MeshStandardMaterial({
-      color: 0xe52521,
-      roughness: 0.3,
-      metalness: 0.1,
-    });
-
-    const wallThickness = 0.8;
-    const wallHeight = 0.6;
-    const arenaSize = 40;
-
-    const wallSpecs = [
-      { size: [arenaSize, wallHeight, wallThickness], pos: [0, wallHeight / 2, -arenaSize / 2], mat: borderMatYellow },
-      { size: [arenaSize, wallHeight, wallThickness], pos: [0, wallHeight / 2, arenaSize / 2], mat: borderMatYellow },
-      { size: [wallThickness, wallHeight, arenaSize], pos: [-arenaSize / 2, wallHeight / 2, 0], mat: borderMatRed },
-      { size: [wallThickness, wallHeight, arenaSize], pos: [arenaSize / 2, wallHeight / 2, 0], mat: borderMatRed },
-    ];
-
-    for (const spec of wallSpecs) {
-      const geo = new THREE.BoxGeometry(spec.size[0], spec.size[1], spec.size[2]);
-      const mesh = new THREE.Mesh(geo, spec.mat);
-      mesh.position.set(spec.pos[0], spec.pos[1], spec.pos[2]);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      this.scene.add(mesh);
     }
   }
 
@@ -580,6 +609,18 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     reactorCore.rotation.x = Math.PI / 2;
     reactorCore.position.set(0, 1.76, 0.4);
     this.heroGroup.add(reactorCore);
+
+    // Lanterna / Farol tático cyber do herói para iluminação noturna
+    const heroSpot = new THREE.SpotLight(0x38bdf8, 2.2, 28, Math.PI / 5, 0.35);
+    heroSpot.position.set(0, 1.76, 0.45);
+    heroSpot.target.position.set(0, 1.5, 14.0);
+    heroSpot.visible = false;
+    this.heroGroup.add(heroSpot);
+    this.heroGroup.add(heroSpot.target);
+
+    if (this.dayNightSystem) {
+      this.dayNightSystem.heroFlashlight = heroSpot;
+    }
 
     // 5. Capacete Cyber-Tático (Cyber-Tactical Helmet)
     const headGeo = new THREE.CylinderGeometry(0.38, 0.42, 0.62, 20);
@@ -1069,6 +1110,14 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
 
     for (const player of snapshot.players) {
       if (player.id === localId) {
+        if (typeof player.health === 'number') {
+          this.world.heroHealth = player.health;
+          this.pilotHealth.set(player.health);
+        }
+        if (typeof player.maxHealth === 'number') {
+          this.world.heroMaxHealth = player.maxHealth;
+          this.pilotMaxHealth.set(player.maxHealth);
+        }
         continue;
       }
 
@@ -1091,7 +1140,9 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
           targetY: player.y,
           targetZ: player.z,
           targetRotationY: player.rotationY,
-          name: player.name,
+          name: player.name || `Piloto_${player.id.substring(0, 4)}`,
+          health: player.health ?? 100,
+          maxHealth: player.maxHealth ?? 100,
         };
         this.remotePlayerVisuals.set(player.id, visual);
       } else if (visual) {
@@ -1099,6 +1150,9 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
         visual.targetY = player.y;
         visual.targetZ = player.z;
         visual.targetRotationY = player.rotationY;
+        if (player.name) visual.name = player.name;
+        if (typeof player.health === 'number') visual.health = player.health;
+        if (typeof player.maxHealth === 'number') visual.maxHealth = player.maxHealth;
       }
     }
 
@@ -1139,12 +1193,13 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Altera o modo de jogo selecionado (Sobrevivência Co-op ou PvP Deathmatch).
+   * Altera o modo de jogo selecionado (Sobrevivência Co-op ou PvP Deathmatch) e transforma o cenário 3D.
    */
   public selectGameMode(mode: GameModeType): void {
     this.gameMode.set(mode);
     this.world.setGameMode(mode);
     this.networkService.setGameMode(mode);
+    this.setScenario(mode);
   }
 
   /**
@@ -1606,6 +1661,26 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     const rightHeadlight = new THREE.Mesh(lightGeo, headlightMat);
     rightHeadlight.position.set(0.6, 0.75, 1.62);
     this.vehicleGroup.add(rightHeadlight);
+
+    // Focos de luz frontais SpotLight para iluminação noturna
+    const leftSpot = new THREE.SpotLight(0xfffbeb, 2.8, 35, Math.PI / 6, 0.4);
+    leftSpot.position.set(-0.6, 0.75, 1.7);
+    leftSpot.target.position.set(-0.6, 0.2, 14.0);
+    leftSpot.visible = false;
+    this.vehicleGroup.add(leftSpot);
+    this.vehicleGroup.add(leftSpot.target);
+
+    const rightSpot = new THREE.SpotLight(0xfffbeb, 2.8, 35, Math.PI / 6, 0.4);
+    rightSpot.position.set(0.6, 0.75, 1.7);
+    rightSpot.target.position.set(0.6, 0.2, 14.0);
+    rightSpot.visible = false;
+    this.vehicleGroup.add(rightSpot);
+    this.vehicleGroup.add(rightSpot.target);
+
+    if (this.dayNightSystem) {
+      this.dayNightSystem.vehicleHeadlights = [leftSpot, rightSpot];
+      this.dayNightSystem.vehicleHeadlightMaterial = headlightMat;
+    }
 
     const leftTaillight = new THREE.Mesh(lightGeo, taillightMat);
     leftTaillight.position.set(-0.6, 0.65, -1.72);
@@ -2211,6 +2286,20 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       visual.mesh.rotation.y = visual.currentRotationY;
     }
 
+    // 7.5. Atualização de Iluminação e Ciclo Dia e Noite Dinâmico
+    const cycleState = this.dayNightSystem?.update(delta);
+    if (cycleState) {
+      if (this.timeOfDayPhase() !== cycleState.phase) {
+        this.timeOfDayPhase.set(cycleState.phase);
+      }
+      if (this.isNightMode() !== cycleState.isNight) {
+        this.isNightMode.set(cycleState.isNight);
+      }
+    }
+
+    // 7.6. Atualização de Projeção 3D->2D das Tags Overhead (HP e Nome dos Pilotos)
+    this.updateOverheadTags();
+
     // 8. Atualização dos Sinais Reativos do HUD (a cada ~60ms para performance)
     this.hudUpdateTimer += delta;
     if (this.hudUpdateTimer >= 0.06) {
@@ -2224,6 +2313,8 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       const currentWeapon = this.world.getEquippedWeapon();
       const currentCooldownProgress = Math.round(this.world.getWeaponCooldownRatio() * 100);
       const match = this.networkService.currentMatch() ?? this.world.matchState;
+      const currentHeroHp = this.world.heroHealth;
+      const currentHeroMaxHp = this.world.heroMaxHealth;
 
       this.ngZone.run(() => {
         if (this.speedKmh() !== currentKmh) this.speedKmh.set(currentKmh);
@@ -2237,6 +2328,10 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
         if (this.weaponCooldownProgress() !== currentCooldownProgress) {
           this.weaponCooldownProgress.set(currentCooldownProgress);
         }
+
+        // Sinais de Vida do Herói / Piloto
+        if (this.pilotHealth() !== currentHeroHp) this.pilotHealth.set(currentHeroHp);
+        if (this.pilotMaxHealth() !== currentHeroMaxHp) this.pilotMaxHealth.set(currentHeroMaxHp);
 
         // Sinais de Partida e Inimigos da Fase 7
         if (this.matchState() !== match.state) this.matchState.set(match.state);
@@ -2258,9 +2353,103 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
+   * Atualiza as tags flutuantes (Overhead Tags) contendo nome e barra de HP acima dos heróis.
+   */
+  public updateOverheadTags(): void {
+    const container = this.containerRef?.nativeElement;
+    const width = container?.clientWidth || 800;
+    const height = container?.clientHeight || 600;
+
+    const tags: PlayerOverheadTag[] = [];
+    const tempVec = new THREE.Vector3();
+
+    // 1. Tag do Jogador Local
+    const isDriving = this.world.isDriving();
+    const heroX = isDriving ? this.world.vehicleTransform.x : this.world.heroTransform.x;
+    const heroY = isDriving ? this.world.vehicleTransform.y + 2.4 : this.world.heroTransform.y + 2.9;
+    const heroZ = isDriving ? this.world.vehicleTransform.z : this.world.heroTransform.z;
+
+    const localHp = this.world.heroHealth;
+    const localMaxHp = this.world.heroMaxHealth;
+    const localPercent = Math.min(100, Math.max(0, Math.round((localHp / localMaxHp) * 100)));
+    const localColor = localPercent >= 60 ? '#10b981' : localPercent >= 25 ? '#f59e0b' : '#ef4444';
+
+    let localScreenX = 0;
+    let localScreenY = 0;
+    let localVisible = false;
+
+    if (this.camera) {
+      tempVec.set(heroX, heroY, heroZ);
+      tempVec.project(this.camera);
+      localScreenX = Math.round((tempVec.x * 0.5 + 0.5) * width);
+      localScreenY = Math.round((-(tempVec.y * 0.5) + 0.5) * height);
+      localVisible = tempVec.z < 1;
+    }
+
+    tags.push({
+      id: 'local_player',
+      name: this.localPilotName(),
+      isLocal: true,
+      health: localHp,
+      maxHealth: localMaxHp,
+      healthPercent: localPercent,
+      color: localColor,
+      screenX: localScreenX,
+      screenY: localScreenY,
+      visible: localVisible,
+    });
+
+    // 2. Tags dos Jogadores Remotos
+    for (const [id, visual] of this.remotePlayerVisuals.entries()) {
+      const rHp = visual.health ?? 100;
+      const rMaxHp = visual.maxHealth || 100;
+      const rPercent = Math.min(100, Math.max(0, Math.round((rHp / rMaxHp) * 100)));
+      const rColor = rPercent >= 60 ? '#10b981' : rPercent >= 25 ? '#f59e0b' : '#ef4444';
+
+      let rScreenX = 0;
+      let rScreenY = 0;
+      let rVisible = false;
+
+      if (this.camera) {
+        tempVec.set(visual.currentX, visual.currentY + 2.9, visual.currentZ);
+        tempVec.project(this.camera);
+        rScreenX = Math.round((tempVec.x * 0.5 + 0.5) * width);
+        rScreenY = Math.round((-(tempVec.y * 0.5) + 0.5) * height);
+        rVisible = tempVec.z < 1;
+      }
+
+      tags.push({
+        id,
+        name: visual.name,
+        isLocal: false,
+        health: rHp,
+        maxHealth: rMaxHp,
+        healthPercent: rPercent,
+        color: rColor,
+        screenX: rScreenX,
+        screenY: rScreenY,
+        visible: rVisible,
+      });
+    }
+
+    this.overheadTags.set(tags);
+  }
+
+  /**
    * Limpeza exaustiva de geometrias, materiais, texturas e renderer Three.js.
    */
   private disposeThreeResources(): void {
+    if (this.currentScenario) {
+      ScenarioFactory.disposeScenario(this.currentScenario);
+      this.currentScenario = null;
+    }
+
+    if (this.dayNightSystem) {
+      this.dayNightSystem.dispose();
+      this.dayNightSystem = null;
+    }
+
+    this.overheadTags.set([]);
     for (const mesh of this.projectileMeshes.values()) {
       this.disposeObject3D(mesh);
     }

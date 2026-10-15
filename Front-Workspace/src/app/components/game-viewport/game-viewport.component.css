@@ -1200,4 +1200,379 @@ iconify-icon {
   box-shadow: 0 8px 24px rgba(59, 130, 246, 0.6);
 }
 
+/* ==========================================================================
+   FASE 7.2: OVERHEAD HEALTH BARS & PLAYER TAGS (3D PROJECTION)
+   ========================================================================== */
+.overhead-tags-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 12;
+}
+
+.player-overhead-tag {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  will-change: left, top;
+  transition: opacity 0.15s ease;
+}
+
+.overhead-name-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  padding: 2px 8px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.tag-local .overhead-name-pill {
+  border-color: rgba(252, 209, 22, 0.65);
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.local-star-icon {
+  color: #fcd116;
+  font-size: 0.85rem;
+}
+
+.overhead-player-name {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #f8fafc;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.tag-local .overhead-player-name {
+  color: #fcd116;
+}
+
+.overhead-hp-bar {
+  width: 68px;
+  height: 6px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.overhead-hp-fill {
+  height: 100%;
+  transition: width 0.15s ease, background-color 0.2s ease;
+  border-radius: 2px;
+}
+
+/* ==========================================================================
+   FASE 7.2: HUD PILOT HEALTH CARD & DAY/NIGHT BADGE
+   ========================================================================== */
+.pilot-hp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 6px 12px;
+  backdrop-filter: blur(8px);
+  min-width: 190px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.2s ease;
+}
+
+.pilot-hp-card.hp-mid {
+  border-color: rgba(245, 158, 11, 0.6);
+}
+
+.pilot-hp-card.hp-low {
+  border-color: rgba(239, 68, 68, 0.8);
+  animation: pulse-hp 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse-hp {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(239, 68, 68, 0.75);
+  }
+}
+
+.hp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hp-label-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hp-icon {
+  font-size: 1rem;
+  color: #10b981;
+}
+
+.hp-low .hp-icon {
+  color: #ef4444;
+}
+
+.hp-mid .hp-icon {
+  color: #f59e0b;
+}
+
+.pilot-display-name {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #f8fafc;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.hp-numeric-val {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.hp-bar-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.hp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  transition: width 0.2s ease;
+}
+
+.hp-mid .hp-bar-fill {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.hp-low .hp-bar-fill {
+  background: linear-gradient(90deg, #dc2626, #ef4444);
+}
+
+.badge-daynight {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fcd116;
+  backdrop-filter: blur(6px);
+}
+
+.badge-daynight.phase-night {
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+.daynight-text {
+  letter-spacing: 0.5px;
+}
+
+/* ==========================================================================
+   FASE 7.2: ARENA ENTRANCE / LOBBY MODAL (LEGO THEME & MULTI-BROWSER)
+   ========================================================================== */
+.arena-entrance-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: rgba(8, 12, 22, 0.88);
+  backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.entrance-card {
+  max-width: 480px;
+  width: 100%;
+  background: linear-gradient(145deg, #131b2e 0%, #0d1322 100%);
+  border: 2px solid #fcd116;
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 0 24px rgba(252, 209, 22, 0.25);
+}
+
+.entrance-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(252, 209, 22, 0.15);
+  border: 1px solid #fcd116;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #fcd116;
+  margin-bottom: 1.25rem;
+  letter-spacing: 0.5px;
+}
+
+.entrance-stud-icon {
+  font-size: 1rem;
+}
+
+.entrance-title {
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: #f8fafc;
+  letter-spacing: 1px;
+  margin: 0 0 0.75rem 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.entrance-desc {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin: 0 0 1.8rem 0;
+}
+
+.entrance-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.input-field-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
+.input-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #cbd5e1;
+  letter-spacing: 0.5px;
+}
+
+.input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.25rem;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.pilot-name-input {
+  width: 100%;
+  background: #090d16;
+  border: 1.5px solid #334155;
+  border-radius: 10px;
+  padding: 12px 14px 12px 44px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f8fafc;
+  outline: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.pilot-name-input:focus {
+  border-color: #fcd116;
+  box-shadow: 0 0 12px rgba(252, 209, 22, 0.35);
+  background: #0d1322;
+}
+
+.validation-error-text {
+  font-size: 0.78rem;
+  color: #ef4444;
+  font-weight: 600;
+  text-align: left;
+}
+
+.btn-enter-arena {
+  width: 100%;
+  background: linear-gradient(135deg, #fcd116 0%, #f59e0b 100%);
+  color: #0f172a;
+  border: none;
+  border-radius: 10px;
+  padding: 14px 20px;
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);
+}
+
+.btn-enter-arena:hover {
+  filter: brightness(1.12);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(245, 158, 11, 0.6);
+}
+
+.btn-enter-arena:active {
+  transform: translateY(0);
+}
+
+.btn-play-icon {
+  font-size: 1.35rem;
+}
+
+.entrance-footer-tips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 1.75rem;
+}
+
+.tip-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
 

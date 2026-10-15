@@ -144,6 +144,8 @@ export class GameWorld {
   public matchState: MatchStateSnapshot = createDefaultMatchState('coop_survival');
   public damageMultiplier = 1.0;
   public cooldownMultiplier = 1.0;
+  public heroHealth = 100;
+  public heroMaxHealth = 100;
   private nextEnemyDebrisId = 20000;
 
   // Estado de Entrada (Inputs)
@@ -497,6 +499,13 @@ export class GameWorld {
       return { reconciled: false, divergence: 0 };
     }
 
+    if (typeof serverPlayer.health === 'number') {
+      this.heroHealth = serverPlayer.health;
+    }
+    if (typeof serverPlayer.maxHealth === 'number') {
+      this.heroMaxHealth = serverPlayer.maxHealth;
+    }
+
     const lastAckSeq = snapshot.ackInputs[localPlayerId] ?? 0;
     // Descarta inputs que o servidor já processou e confirmou
     this.pendingInputs.splice(
@@ -546,6 +555,24 @@ export class GameWorld {
 
   public clearPendingInputs(): void {
     this.pendingInputs.length = 0;
+  }
+
+  public getHeroHealth(): number {
+    return this.heroHealth;
+  }
+
+  public getHeroMaxHealth(): number {
+    return this.heroMaxHealth;
+  }
+
+  public damageHero(amount: number): number {
+    this.heroHealth = Math.max(0, this.heroHealth - amount);
+    return this.heroHealth;
+  }
+
+  public healHero(amount: number): number {
+    this.heroHealth = Math.min(this.heroMaxHealth, this.heroHealth + amount);
+    return this.heroHealth;
   }
 
   // --- MÉTODOS DE ARSENAL & COMBATE LEGO ---

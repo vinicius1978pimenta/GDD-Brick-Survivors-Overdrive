@@ -69,7 +69,8 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     @MessageBody() payload?: JoinGameDto,
   ): Promise<JoinGameResponse> {
     await client.join('game-room');
-    const player = this.gameRoomService.addPlayer(client.id, payload?.playerName);
+    const requestedName = payload?.playerName ?? payload?.name;
+    const player = this.gameRoomService.addPlayer(client.id, requestedName);
 
     this.logger.log(`Player registered: ${player.name} (${client.id})`);
     return {

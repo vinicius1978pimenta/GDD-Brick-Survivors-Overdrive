@@ -1,4 +1,4 @@
-import type { DamageEventSnapshot, ProjectileSnapshot } from './combat.interface.js';
+import type { DamageEventSnapshot, ProjectileSnapshot, WeaponType } from './combat.interface.js';
 
 export interface PlayerSnapshot {
   readonly id: string;
@@ -13,6 +13,9 @@ export interface PlayerSnapshot {
   readonly vehicleId: string | null;
   readonly health: number;
   readonly maxHealth: number;
+  readonly hp: number;
+  readonly maxHp: number;
+  readonly weapon: WeaponType;
 }
 
 export interface VehicleSnapshot {

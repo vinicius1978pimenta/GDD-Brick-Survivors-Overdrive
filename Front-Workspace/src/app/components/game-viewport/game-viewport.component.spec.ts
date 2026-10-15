@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { GameViewportComponent } from './game-viewport.component';
+import { DayNightSystem } from './day-night.system';
 
 describe('GameViewportComponent', () => {
   let component: GameViewportComponent;
@@ -757,5 +758,141 @@ describe('GameViewportComponent', () => {
       expect(enemyVisual?.mesh).toBeDefined();
     });
   });
+
+  describe('Expansão: Lobby Inicial, Cenários 100x100, Ciclo Dia/Noite e Overhead HP', () => {
+    it('deve exibir o modal inicial de entrada na arena quando hasJoinedArena for false', () => {
+      component.hasJoinedArena.set(false);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const entryModal = compiled.querySelector('.arena-entrance-backdrop');
+      expect(entryModal).not.toBeNull();
+      expect(entryModal?.textContent).toContain('ENTRE NA ARENA DE BLOCOS');
+      expect(compiled.querySelector('.btn-enter-arena')).not.toBeNull();
+    });
+
+    it('deve validar o nome do piloto recusando nomes com menos de 2 ou mais de 16 caracteres', () => {
+      component.hasJoinedArena.set(false);
+
+      // Nome com menos de 2 caracteres
+      component.pilotNameInput.set('A');
+      component.enterArena();
+      expect(component.nameValidationError()).toContain('entre 2 e 16 caracteres');
+      expect(component.hasJoinedArena()).toBe(false);
+
+      // Nome com mais de 16 caracteres
+      component.pilotNameInput.set('PilotoMuitoLongoComMaisDe16Caracteres');
+      component.enterArena();
+      expect(component.nameValidationError()).toContain('entre 2 e 16 caracteres');
+      expect(component.hasJoinedArena()).toBe(false);
+    });
+
+    it('deve permitir a entrada na arena com nome válido, chamando networkService.connect() e networkService.joinGame()', () => {
+      component.hasJoinedArena.set(false);
+      const connectSpy = vi.spyOn(component.networkService, 'connect');
+      const joinSpy = vi.spyOn(component.networkService, 'joinGame');
+
+      component.pilotNameInput.set('PilotoMestre');
+      component.enterArena();
+
+      expect(component.nameValidationError()).toBeNull();
+      expect(component.hasJoinedArena()).toBe(true);
+      expect(component.localPilotName()).toBe('PilotoMestre');
+      expect(connectSpy).toHaveBeenCalled();
+      expect(joinSpy).toHaveBeenCalledWith('PilotoMestre');
+
+      fixture.detectChanges();
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.querySelector('.arena-entrance-backdrop')).toBeNull();
+    });
+
+    it('deve alternar cenários 100x100 dinamicamente entre Outpost Industrial e Neon Cyber Arena', () => {
+      component['scene'] = new THREE.Scene();
+
+      // Cenário de Sobrevivência Co-op
+      component.setScenario('coop_survival');
+      expect(component['currentScenario']).not.toBeNull();
+      expect(component['currentScenario']?.theme).toBe('industrial_outpost');
+      expect(component['scene'].children).toContain(component['currentScenario']!.group);
+
+      const previousGroup = component['currentScenario']!.group;
+
+      // Cenário de PvP Deathmatch
+      component.setScenario('pvp_deathmatch');
+      expect(component['currentScenario']?.theme).toBe('neon_cyber');
+      expect(component['scene'].children).not.toContain(previousGroup);
+      expect(component['scene'].children).toContain(component['currentScenario']!.group);
+    });
+
+    it('deve atualizar o ciclo Dia e Noite e acionar iluminação noturna na fase da noite', () => {
+      const scene = new THREE.Scene();
+      const sun = new THREE.DirectionalLight();
+      const amb = new THREE.AmbientLight();
+      const hemi = new THREE.HemisphereLight();
+      const dayNight = new DayNightSystem(scene, sun, amb, hemi, 90);
+
+      const spotLeft = new THREE.SpotLight();
+      const spotRight = new THREE.SpotLight();
+      dayNight.vehicleHeadlights = [spotLeft, spotRight];
+
+      // Meio do dia com sol a pino (t = 22.5s de 90s, zênite / elevação = 1.0)
+      const dayState = dayNight.update(22.5);
+      expect(dayState.phase).toBe('day');
+      expect(dayState.isNight).toBe(false);
+      expect(spotLeft.visible).toBe(false);
+
+      // Avança para a meia-noite profunda (t = 22.5 + 45 = 67.5s de 90s, nadir / elevação = -1.0)
+      const nightState = dayNight.update(45);
+      expect(nightState.isNight).toBe(true);
+      expect(nightState.phase).toBe('night');
+      expect(spotLeft.visible).toBe(true);
+      expect(spotRight.visible).toBe(true);
+    });
+
+    it('deve calcular cores dinâmicas da barra de HP e atualizar as tags overhead de jogadores', () => {
+      component['camera'] = new THREE.PerspectiveCamera(65, 800 / 600, 0.1, 1000);
+      component['camera'].position.set(0, 5, 10);
+      component['camera'].lookAt(0, 0, 0);
+
+      component.world.heroTransform.x = 0;
+      component.world.heroTransform.y = 0;
+      component.world.heroTransform.z = 0;
+
+      // 80% HP -> Verde
+      component.world.heroHealth = 80;
+      component.world.heroMaxHealth = 100;
+      component.updateOverheadTags();
+      let tags = component.overheadTags();
+      expect(tags.length).toBeGreaterThan(0);
+      expect(tags[0].healthPercent).toBe(80);
+      expect(tags[0].color).toBe('#10b981');
+
+      // 40% HP -> Amarelo
+      component.world.heroHealth = 40;
+      component.updateOverheadTags();
+      tags = component.overheadTags();
+      expect(tags[0].healthPercent).toBe(40);
+      expect(tags[0].color).toBe('#f59e0b');
+
+      // 15% HP -> Vermelho
+      component.world.heroHealth = 15;
+      component.updateOverheadTags();
+      tags = component.overheadTags();
+      expect(tags[0].healthPercent).toBe(15);
+      expect(tags[0].color).toBe('#ef4444');
+    });
+
+    it('deve exibir o medidor de vida no HUD principal com a porcentagem e valores corretos', () => {
+      component.pilotHealth.set(75);
+      component.pilotMaxHealth.set(100);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const hpCard = compiled.querySelector('.pilot-hp-card');
+      expect(hpCard).not.toBeNull();
+      expect(hpCard?.textContent).toContain('75 / 100 HP');
+    });
+  });
 });
+
 

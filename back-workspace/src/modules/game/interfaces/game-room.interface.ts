@@ -1,4 +1,5 @@
 import { PlayerInputDto } from '../dto/player-input.dto.js';
+import type { WeaponType } from './combat.interface.js';
 
 export interface ConnectedPlayer {
   id: string;
@@ -16,6 +17,7 @@ export interface ConnectedPlayer {
   pendingInputs: PlayerInputDto[];
   health: number;
   maxHealth: number;
+  weapon: WeaponType;
 }
 
 export interface RoomVehicle {
@@ -33,10 +35,10 @@ export interface RoomVehicle {
 }
 
 export const ARENA_BOUNDS = {
-  minX: -19,
-  maxX: 19,
-  minZ: -19,
-  maxZ: 19,
+  minX: -49,
+  maxX: 49,
+  minZ: -49,
+  maxZ: 49,
 } as const;
 
 export const SIMULATION_CONFIG = {

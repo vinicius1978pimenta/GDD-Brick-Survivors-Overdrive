@@ -59,7 +59,7 @@ export interface EnemySnapshot {
 
 export interface PlayerMatchScore {
   readonly playerId: string;
-  readonly playerName: string;
+  playerName: string;
   kills: number;
   deaths: number;
   score: number;

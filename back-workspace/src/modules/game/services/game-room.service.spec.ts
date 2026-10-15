@@ -110,6 +110,37 @@ describe('GameRoomService', () => {
         expect(vehicle.isDrifting).toBe(false);
       }
     });
+
+    it('should spawn players at distributed positions in the 15m to 35m ring avoiding collision', () => {
+      const p1 = service.addPlayer('socket-1', 'PilotA');
+      const p2 = service.addPlayer('socket-2', 'PilotB');
+      const p3 = service.addPlayer('socket-3', 'PilotC');
+
+      const dist1 = Math.hypot(p1.x, p1.z);
+      const dist2 = Math.hypot(p2.x, p2.z);
+      const dist3 = Math.hypot(p3.x, p3.z);
+
+      expect(dist1).toBeGreaterThanOrEqual(15);
+      expect(dist1).toBeLessThanOrEqual(35);
+      expect(dist2).toBeGreaterThanOrEqual(15);
+      expect(dist2).toBeLessThanOrEqual(35);
+      expect(dist3).toBeGreaterThanOrEqual(15);
+      expect(dist3).toBeLessThanOrEqual(35);
+
+      const separation12 = Math.hypot(p1.x - p2.x, p1.z - p2.z);
+      const separation23 = Math.hypot(p2.x - p3.x, p2.z - p3.z);
+      expect(separation12).toBeGreaterThanOrEqual(10);
+      expect(separation23).toBeGreaterThanOrEqual(10);
+    });
+
+    it('should update player name when addPlayer is called again for existing socket', () => {
+      const initial = service.addPlayer('socket-1', 'InitialName');
+      expect(initial.name).toBe('InitialName');
+
+      const updated = service.addPlayer('socket-1', 'UpdatedHero');
+      expect(updated.name).toBe('UpdatedHero');
+      expect(service.getPlayerCount()).toBe(1);
+    });
   });
 
   describe('Input Queueing and Sequence Acknowledgement', () => {
@@ -205,8 +236,8 @@ describe('GameRoomService', () => {
 
     it('should clamp player within arena bounds', () => {
       const player = service.addPlayer('socket-1', 'Player1');
-      player.x = 18.9;
-      player.z = 18.9;
+      player.x = 48.5;
+      player.z = 48.5;
       player.rotationY = Math.PI / 4;
 
       for (let i = 0; i < 50; i++) {
@@ -486,7 +517,7 @@ describe('GameRoomService', () => {
       expect(vehicle).toBeDefined();
 
       if (vehicle) {
-        vehicle.x = 25;
+        vehicle.x = 55;
         vehicle.currentSpeed = 10;
         service.stepSimulation(0.05);
 
@@ -522,6 +553,9 @@ describe('GameRoomService', () => {
       expect(typeof p.isGrounded).toBe('boolean');
       expect(typeof p.health).toBe('number');
       expect(p.health).toBe(100);
+      expect(p.hp).toBe(100);
+      expect(p.maxHp).toBe(100);
+      expect(p.weapon).toBe('stud_blaster');
 
       const v = snapshot.vehicles[0];
       expect(typeof v.x).toBe('number');
@@ -562,6 +596,22 @@ describe('GameRoomService', () => {
 
       expect(shootResult.success).toBe(false);
       expect(shootResult.reason).toBe('Player not connected');
+    });
+
+    it('should update player active weapon when player shoots with different weapon', () => {
+      const player = service.addPlayer('socket-1', 'Sharpshooter');
+      expect(player.weapon).toBe('stud_blaster');
+
+      service.handlePlayerShoot('socket-1', {
+        weaponType: 'scatter_shot',
+        origin: { x: 0, y: 1.0, z: 0 },
+        direction: { x: 0, y: 0, z: 1 },
+        clientTimestamp: Date.now(),
+      });
+
+      expect(player.weapon).toBe('scatter_shot');
+      const snapshot = service.stepSimulation(0.05);
+      expect(snapshot.players[0].weapon).toBe('scatter_shot');
     });
   });
 

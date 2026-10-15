@@ -94,7 +94,10 @@ export class MatchManagerService {
   }
 
   public registerPlayer(player: ConnectedPlayer): void {
-    if (!this.playerScores.has(player.id)) {
+    const existing = this.playerScores.get(player.id);
+    if (existing) {
+      existing.playerName = player.name;
+    } else {
       this.playerScores.set(player.id, {
         playerId: player.id,
         playerName: player.name,
@@ -426,10 +429,12 @@ export class MatchManagerService {
           }
         }
 
-        // Safe respawn
+        // Safe respawn distributed in expanded arena (15m to 35m radius)
+        const respawnAngle = Math.random() * Math.PI * 2;
+        const respawnDist = 15.0 + Math.random() * 20.0;
         player.health = player.maxHealth;
-        player.x = (Math.random() - 0.5) * 24;
-        player.z = (Math.random() - 0.5) * 24;
+        player.x = Number((Math.cos(respawnAngle) * respawnDist).toFixed(2));
+        player.z = Number((Math.sin(respawnAngle) * respawnDist).toFixed(2));
         player.speed = 0;
 
         if (victimScore) {
@@ -479,14 +484,18 @@ export class MatchManagerService {
       for (let i = 0; i < count; i++) {
         this.enemySeq++;
         const angle = Math.random() * Math.PI * 2;
-        const spawnDist = 16.0;
+        const spawnDist = 25.0 + Math.random() * 15.0; // 25m to 40m in 100x100 arena
+        const rawX = Math.cos(angle) * spawnDist;
+        const rawZ = Math.sin(angle) * spawnDist;
+        const clampedX = Math.max(ARENA_BOUNDS.minX + 3, Math.min(ARENA_BOUNDS.maxX - 3, rawX));
+        const clampedZ = Math.max(ARENA_BOUNDS.minZ + 3, Math.min(ARENA_BOUNDS.maxZ - 3, rawZ));
 
         const enemy: EnemyEntity = {
           id: `enemy-${type}-${this.enemySeq}`,
           type,
-          x: Math.cos(angle) * spawnDist,
+          x: Number(clampedX.toFixed(2)),
           y: 0,
-          z: Math.sin(angle) * spawnDist,
+          z: Number(clampedZ.toFixed(2)),
           vx: 0,
           vy: 0,
           vz: 0,
