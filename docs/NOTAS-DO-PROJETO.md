@@ -109,7 +109,36 @@ A **Fase 4: Sistema Modular de Blocos e Destruição Estilo Lego** foi concluíd
 
 ---
 
-## 5. Estrutura Atual de Pastas
+## 5. Visão Geral da Fase 5 (Concluída com Sucesso)
+
+A **Fase 5: Netcode Autoritativo (NestJS Socket.IO, Predição & Reconciliação)** foi implementada pelos Especialistas de Back-End e Front-End e auditada com 100% de aprovação pelo Especialista de QA:
+
+### Entregas Realizadas:
+1. **Back-End Autoritativo (`back-workspace/src/modules/game/`):**
+   - **`GameGateway`**: Gateway WebSocket baseado em Socket.IO com CORS habilitado, gerenciamento de conexões/desconexões, tratamento de eventos (`joinGame`, `playerInput`, `ping`/`pong`).
+   - **`GameRoomService`**: Motor autoritativo rodando em tick rate de 20Hz (50ms). Simulação física determinística isomórfica de pedestres e veículos arcade, validação de limites de arena ([-19, 19]), embarque/desembarque sincronizado e descarte seguro de recursos via `OnModuleDestroy`.
+   - **DTOs com Validação Estrita**: `PlayerInputDto`, `JoinGameDto`, `WorldStateSnapshotDto`, com suporte a confirmação sequencial de comandos por cliente (`ackInputs`).
+   - **Heartbeat & Latência**: Resposta imediata a eventos `ping` emitindo `pong` com timestamp do cliente e servidor para cálculo do RTT no cliente.
+   - **Testes Unitários:** 27 testes aprovados (100% de sucesso em 3 suítes com Vitest).
+
+2. **Front-End Reativo e Predição no Cliente (`Front-Workspace/src/app/core/`):**
+   - **`NetworkService` (`core/network/`):** Serviço reativo Angular com sinais públicos para o HUD (`isConnected`, `pingMs`, `serverTick`, `localPlayerId`, `latestSnapshot`), conexão assíncrona com fallback de SSR (`isPlatformBrowser`), envio de comandos sequenciais (`sequenceNumber`) e medição de ping com heartbeat periódico.
+   - **Client-Side Prediction & Server Reconciliation (`game-world.ts`):** Buffer de comandos locais pendentes executados imediatamente a 60 FPS locais. Ao receber o snapshot autoritativo de 20Hz do servidor, reconcilia e remove inputs com `seq <= ackInputs[localPlayerId]`; se a divergência espacial exceder o limiar de 0.25m, aplica snap corretivo suave e reexecuta (*replay*) os inputs locais pendentes.
+   - **Interpolação de Entidades Remotas (`game-viewport.component.ts`):** Criação e sincronização dinâmica de heróis remotos estilo Lego em tom ciano brilhante, com interpolação linear suave (`Lerp` a 15.0/s) entre snapshots de 20Hz para eliminar qualquer engasgo visual ou teletransporte.
+   - **HUD Multiplayer Reativo:** Badge dinâmico no topo esquerdo da viewport (`🟢 ONLINE` com latência em tempo real `Ping: Xms` / `🔴 OFFLINE` quando desconectado).
+   - **Testes Unitários:** 79 testes aprovados (100% de sucesso em 10 suítes com Vitest).
+
+3. **Auditoria de Qualidade e Homologação (QA):**
+   - **Total de Testes Automatizados no Monorepo:** **106 testes aprovados (100% de aprovação)**:
+     - Back-end: 27 testes passando.
+     - Front-end: 79 testes passando.
+   - **Builds de Produção:** `nest build` (código 0) e `ng build` (código 0, zero warnings de budget).
+   - **Tipagem Estrita:** 0 ocorrências de `any` em todo o código-fonte.
+   - **Gestão de Memória:** Cancelamento explícito de subscrições, descarte de geometrias/materiais Three.js dos jogadores remotos no `ngOnDestroy` e parada do loop no `OnModuleDestroy`.
+
+---
+
+## 6. Estrutura Atual de Pastas
 
 ```text
 GDD-Brick-Survivors-Overdrive/
@@ -120,23 +149,32 @@ GDD-Brick-Survivors-Overdrive/
 │       ├── frontend-architecture/
 │       ├── game-architecture/
 │       └── qa-testing/
-├── back-workspace/               # Aplicação NestJS + TypeORM + Vitest
+├── back-workspace/               # Aplicação NestJS 12 + TypeORM + Socket.IO + Vitest
+│   ├── src/
+│   │   ├── modules/
+│   │   │   └── game/             # Módulo Multiplayer Autoritativo
+│   │   │       ├── dto/          # DTOs de input, join e snapshots com ackInputs
+│   │   │       ├── gateways/     # GameGateway (WebSocket)
+│   │   │       └── services/     # GameRoomService (Loop 20Hz, física arcade)
 ├── Front-Workspace/              # Aplicação Angular 22 Standalone + Three.js + Vitest
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── core/
-│   │   │   │   └── engine/       # Motor ECS Puro (Isomórfico & Desacoplado de Three.js)
-│   │   │   │       ├── types.ts
-│   │   │   │       ├── modular-block.types.ts
-│   │   │   │       ├── object-pool.ts
-│   │   │   │       ├── modular-block.system.ts
-│   │   │   │       ├── game-loop.ts
-│   │   │   │       ├── game-world.ts
-│   │   │   │       ├── movement.system.ts
-│   │   │   │       ├── vehicle.system.ts
-│   │   │   │       └── interaction.system.ts
+│   │   │   │   ├── engine/       # Motor ECS Puro (Isomórfico & Desacoplado de Three.js)
+│   │   │   │   │   ├── types.ts
+│   │   │   │   │   ├── modular-block.types.ts
+│   │   │   │   │   ├── object-pool.ts
+│   │   │   │   │   ├── modular-block.system.ts
+│   │   │   │   │   ├── game-loop.ts
+│   │   │   │   │   ├── game-world.ts (Predição e Reconciliação)
+│   │   │   │   │   ├── movement.system.ts
+│   │   │   │   │   ├── vehicle.system.ts
+│   │   │   │   │   └── interaction.system.ts
+│   │   │   │   └── network/      # Serviço de Rede e Conexão Socket.IO
+│   │   │   │       ├── network.service.ts
+│   │   │   │       └── network.types.ts
 │   │   │   ├── components/
-│   │   │   │   └── game-viewport/# Viewport 3D Three.js + HUD Arcade + Inputs
+│   │   │   │   └── game-viewport/# Viewport 3D Three.js + Interpolação Remota + HUD Arcade + Badge de Rede
 │   │   │   ├── app.component.html
 │   │   │   ├── app.component.ts
 │   │   │   └── app.component.spec.ts
@@ -154,18 +192,18 @@ GDD-Brick-Survivors-Overdrive/
 
 ---
 
-## 6. Comandos para Execução e Testes Locais
+## 7. Comandos para Execução e Testes Locais
 
 ```bash
-# Executar suíte completa de testes no monorepo
-npm run test:backend     # 1 teste passando no NestJS
-npm run test:frontend    # 56 testes passando no Angular/Vitest
+# Executar suíte completa de testes no monorepo (106 testes)
+npm run test:backend     # 27 testes passando no NestJS
+npm run test:frontend    # 79 testes passando no Angular/Vitest
 
 # Compilações de produção
 npm run build:backend    # NestJS build
 npm run build:frontend   # Angular build
 
 # Servidores de desenvolvimento
-npm run start:backend    # NestJS watch mode
+npm run start:backend    # NestJS watch mode (WebSocket na porta 3000)
 npm run start:frontend   # Angular dev server (porta 4200)
 ```
