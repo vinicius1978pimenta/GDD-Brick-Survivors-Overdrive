@@ -335,23 +335,32 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       player.rotationY += steer * PLAYER_CONFIG.turnSpeed * dt;
     }
 
-    if (input.forward) {
-      if (player.speed < -0.5) {
-        player.speed += PLAYER_CONFIG.deceleration * dt;
-      } else {
-        player.speed = Math.min(PLAYER_CONFIG.maxSpeed, player.speed + PLAYER_CONFIG.acceleration * dt);
-      }
-    } else if (input.backward) {
-      if (player.speed > 0.5) {
-        player.speed = Math.max(0, player.speed - PLAYER_CONFIG.deceleration * dt);
-      } else {
-        player.speed = Math.max(-PLAYER_CONFIG.reverseMaxSpeed, player.speed - PLAYER_CONFIG.acceleration * 0.75 * dt);
-      }
+    const forwardAxis = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);
+    const strafeAxis = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    const fx = Math.sin(player.rotationY);
+    const fz = Math.cos(player.rotationY);
+    const rx = -Math.cos(player.rotationY);
+    const rz = Math.sin(player.rotationY);
+
+    if (forwardAxis !== 0 || strafeAxis !== 0) {
+      let dx = fx * forwardAxis + rx * strafeAxis;
+      let dz = fz * forwardAxis + rz * strafeAxis;
+      const len = Math.hypot(dx, dz) || 1;
+      dx /= len;
+      dz /= len;
+      player.speed = Math.min(PLAYER_CONFIG.maxSpeed, player.speed + PLAYER_CONFIG.acceleration * dt);
+      const vx = dx * player.speed;
+      const vz = dz * player.speed;
+      player.x += vx * dt;
+      player.z += vz * dt;
     } else {
       if (player.speed > 0) {
         player.speed = Math.max(0, player.speed - PLAYER_CONFIG.deceleration * dt);
       } else if (player.speed < 0) {
         player.speed = Math.min(0, player.speed + PLAYER_CONFIG.deceleration * dt);
+      }
+      if (Math.abs(player.speed) < 0.05) {
+        player.speed = 0;
       }
     }
 
@@ -375,11 +384,6 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       player.vy = 0;
       player.isGrounded = true;
     }
-
-    const vx = Math.sin(player.rotationY) * player.speed;
-    const vz = Math.cos(player.rotationY) * player.speed;
-    player.x += vx * dt;
-    player.z += vz * dt;
 
     for (const vehicle of this.vehicles.values()) {
       this.resolvePedestrianVehicleCollision(player, vehicle);

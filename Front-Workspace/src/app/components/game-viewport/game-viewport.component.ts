@@ -1682,9 +1682,8 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       if (this.raycaster.ray.intersectPlane(this.groundPlane, hitPoint)) {
         this.aimTarget3D.copy(hitPoint);
 
-        // Se a pé e não estiver esterçando via teclado (A/D), orienta na direção do mouse
-        const isUsingSteer = Boolean(this.world.inputState.left || this.world.inputState.right);
-        if (!this.world.isDriving() && !isUsingSteer) {
+        // Se a pé, orienta instantaneamente a rotação do herói na direção da mira do mouse
+        if (!this.world.isDriving()) {
           const dx = hitPoint.x - this.world.heroTransform.x;
           const dz = hitPoint.z - this.world.heroTransform.z;
           if (Math.hypot(dx, dz) > 0.15) {
@@ -1779,9 +1778,8 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       this.world.enqueuePendingInput(seq, this.world.inputState, delta);
     }
 
-    // Se a pé e não estiver esterçando pelo teclado (A/D), orienta para o mouse para que avançar (W) siga o cursor
-    const isUsingSteerKeys = Boolean(this.world.inputState.left || this.world.inputState.right);
-    if (!this.world.isDriving() && !isUsingSteerKeys) {
+    // Se a pé, orienta a direção do herói para onde o mouse aponta na arena (twin-stick / strafe)
+    if (!this.world.isDriving()) {
       const dx = this.aimTarget3D.x - this.world.heroTransform.x;
       const dz = this.aimTarget3D.z - this.world.heroTransform.z;
       if (Math.hypot(dx, dz) > 0.15) {

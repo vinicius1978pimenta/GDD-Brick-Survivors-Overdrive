@@ -47,39 +47,57 @@ describe('MovementSystem', () => {
     expect(transform.z).toBeGreaterThan(0); // Movimentou-se para a frente (+Z)
   });
 
-  it('deve recuar de ré (-Z) mantendo orientação frontal com input backward', () => {
+  it('deve recuar de ré (-Z) mantendo velocidade positiva e vetor direcional negativo com input backward', () => {
     input.backward = true;
     updateMovementSystem(transform, velocity, controller, input, false, 0.1);
 
-    expect(controller.speed).toBeLessThan(0);
+    expect(controller.speed).toBeGreaterThan(0);
     expect(controller.isMoving).toBe(true);
+    expect(velocity.vz).toBeLessThan(0);
     expect(transform.z).toBeLessThan(0); // Recuou para trás (-Z)
   });
 
-  it('deve rotacionar para a esquerda (A) e direita (D) estilo condução', () => {
-    // Rotação para a esquerda (A)
-    input.left = true;
-    updateMovementSystem(transform, velocity, controller, input, false, 0.1);
-    expect(transform.rotationY).toBeGreaterThan(0);
-
-    // Rotação para a direita (D)
-    input.left = false;
+  it('deve realizar strafe lateral para a direita (+X) com D e para a esquerda (-X) com A quando virado para frente', () => {
+    // Strafe para a direita (D) com mouse/mira para frente (rotationY = 0)
     input.right = true;
-    transform.rotationY = 0;
     updateMovementSystem(transform, velocity, controller, input, false, 0.1);
-    expect(transform.rotationY).toBeLessThan(0);
+    expect(controller.isMoving).toBe(true);
+    expect(controller.speed).toBeGreaterThan(0);
+    expect(velocity.vx).toBeGreaterThan(0);
+    expect(transform.x).toBeGreaterThan(0);
+    expect(transform.z).toBe(0);
+
+    // Reseta estado para strafe para a esquerda (A)
+    transform.x = 0;
+    transform.z = 0;
+    velocity.vx = 0;
+    velocity.vz = 0;
+    controller.speed = 0;
+    input.right = false;
+    input.left = true;
+
+    updateMovementSystem(transform, velocity, controller, input, false, 0.1);
+    expect(controller.isMoving).toBe(true);
+    expect(controller.speed).toBeGreaterThan(0);
+    expect(velocity.vx).toBeLessThan(0);
+    expect(transform.x).toBeLessThan(0);
+    expect(transform.z).toBe(0);
   });
 
-  it('deve permitir girar o corpo no próprio eixo mesmo estando parado', () => {
-    controller.speed = 0;
-    input.left = true;
+  it('deve normalizar o vetor de movimentação na diagonal (forward + right) sem exceder a velocidade máxima', () => {
+    input.forward = true;
+    input.right = true;
 
     updateMovementSystem(transform, velocity, controller, input, false, 0.1);
 
-    expect(transform.rotationY).toBeGreaterThan(0);
     expect(controller.isMoving).toBe(true);
-    expect(transform.x).toBe(0);
-    expect(transform.z).toBe(0);
+    expect(transform.x).toBeGreaterThan(0);
+    expect(transform.z).toBeGreaterThan(0);
+
+    // A magnitude da velocidade calculada no plano XZ deve ser exatamente controller.speed
+    const speedMagnitude = Math.hypot(velocity.vx, velocity.vz);
+    expect(speedMagnitude).toBeCloseTo(controller.speed, 4);
+    expect(speedMagnitude).toBeLessThanOrEqual(controller.maxSpeed);
   });
 
   it('deve desacelerar o personagem gradualmente quando o input for liberado', () => {

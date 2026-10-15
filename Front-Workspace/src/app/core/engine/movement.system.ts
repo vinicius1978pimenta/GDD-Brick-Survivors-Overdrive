@@ -49,56 +49,54 @@ export function updateMovementSystem(
     return;
   }
 
-  // 1. Rotação / Esterçamento Angular do Personagem (A/D)
-  const turnSpeed = controller.turnSpeed ?? 3.8;
-  let steerInput = 0;
-  if (input.left) steerInput += 1;
-  if (input.right) steerInput -= 1;
+  // 1. Vetores direcionais relativos à orientação do herói (alinhada à mira)
+  const angle = transform.rotationY;
+  const fx = Math.sin(angle);
+  const fz = Math.cos(angle);
+  const rx = -Math.cos(angle);
+  const rz = Math.sin(angle); // Vetor lateral perpendicular para a direita (+D)
 
-  if (steerInput !== 0) {
-    transform.rotationY += steerInput * turnSpeed * dt;
-  }
+  // 2. Captura dos eixos de input
+  const forwardAxis = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);
+  const strafeAxis = (input.right ? 1 : 0) - (input.left ? 1 : 0); // D = +1 (direita), A = -1 (esquerda)
+  const hasMoveInput = forwardAxis !== 0 || strafeAxis !== 0;
 
-  // 2. Aceleração / Frenagem / Recuo (W/S)
-  const reverseMax = Math.abs(controller.reverseMaxSpeed ?? (controller.maxSpeed * 0.55));
+  if (hasMoveInput) {
+    let moveDirX = fx * forwardAxis + rx * strafeAxis;
+    let moveDirZ = fz * forwardAxis + rz * strafeAxis;
+    const len = Math.hypot(moveDirX, moveDirZ) || 1;
+    moveDirX /= len;
+    moveDirZ /= len;
 
-  if (input.forward) {
-    if (controller.speed < -0.5) {
-      // Freia o recuo
-      controller.speed += controller.deceleration * dt;
-    } else {
-      // Acelera para frente na direção frontal
-      controller.speed = Math.min(
-        controller.maxSpeed,
-        controller.speed + controller.acceleration * dt,
-      );
-    }
-  } else if (input.backward) {
-    if (controller.speed > 0.5) {
-      // Freia a marcha à frente
-      controller.speed = Math.max(0, controller.speed - controller.deceleration * dt);
-    } else {
-      // Recua suavemente de ré
-      controller.speed = Math.max(
-        -reverseMax,
-        controller.speed - controller.acceleration * 0.75 * dt,
-      );
-    }
+    // Acelera controller.speed até o máximo
+    controller.speed = Math.min(
+      controller.maxSpeed,
+      controller.speed + controller.acceleration * dt,
+    );
+
+    velocity.vx = moveDirX * controller.speed;
+    velocity.vz = moveDirZ * controller.speed;
+    controller.isMoving = true;
+    controller.moveAngle = Math.atan2(moveDirX, moveDirZ);
   } else {
     // Desaceleração passiva por atrito
     if (controller.speed > 0) {
       controller.speed = Math.max(0, controller.speed - controller.deceleration * dt);
-    } else if (controller.speed < 0) {
-      controller.speed = Math.min(0, controller.speed + controller.deceleration * dt);
+      const currentLen = Math.hypot(velocity.vx, velocity.vz);
+      if (currentLen > 0.001) {
+        velocity.vx = (velocity.vx / currentLen) * controller.speed;
+        velocity.vz = (velocity.vz / currentLen) * controller.speed;
+      } else {
+        velocity.vx = 0;
+        velocity.vz = 0;
+      }
+    } else {
+      controller.speed = 0;
+      velocity.vx = 0;
+      velocity.vz = 0;
     }
+    controller.isMoving = controller.speed > 0.05;
   }
-
-  controller.isMoving = Math.abs(controller.speed) > 0.05 || steerInput !== 0;
-  controller.moveAngle = transform.rotationY;
-
-  // 3. Vetor de velocidade baseado no ângulo atual
-  velocity.vx = Math.sin(transform.rotationY) * controller.speed;
-  velocity.vz = Math.cos(transform.rotationY) * controller.speed;
 
   // 4. Física Vertical no Eixo Y (Pulo e Gravidade)
   const jumpForce = controller.jumpForce ?? 7.2;

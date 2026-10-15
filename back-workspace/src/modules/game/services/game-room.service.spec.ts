@@ -261,6 +261,124 @@ describe('GameRoomService', () => {
       expect(player.y).toBe(0);
       expect(player.isGrounded).toBe(true);
     });
+
+    it('should strafe laterally to the right when right input is active', () => {
+      const player = service.addPlayer('socket-1', 'StrafingHero');
+      player.x = 0;
+      player.z = 0;
+      player.rotationY = 0;
+
+      service.enqueueInput('socket-1', {
+        seq: 1,
+        forward: false,
+        backward: false,
+        left: false,
+        right: true,
+        handbrake: false,
+        jump: false,
+        interact: false,
+        dt: 0.05,
+        timestamp: Date.now(),
+      });
+
+      service.stepSimulation(0.05);
+
+      expect(player.speed).toBeGreaterThan(0);
+      expect(player.x).toBeGreaterThan(0);
+    });
+
+    it('should strafe laterally to the left when left input is active', () => {
+      const player = service.addPlayer('socket-1', 'StrafingHeroLeft');
+      player.x = 0;
+      player.z = 0;
+      player.rotationY = 0;
+
+      service.enqueueInput('socket-1', {
+        seq: 1,
+        forward: false,
+        backward: false,
+        left: true,
+        right: false,
+        handbrake: false,
+        jump: false,
+        interact: false,
+        dt: 0.05,
+        timestamp: Date.now(),
+      });
+
+      service.stepSimulation(0.05);
+
+      expect(player.speed).toBeGreaterThan(0);
+      expect(player.x).toBeLessThan(0);
+    });
+
+    it('should combine forward and strafe inputs diagonally with normalized vector', () => {
+      const player = service.addPlayer('socket-1', 'DiagonalHero');
+      player.x = 0;
+      player.z = 0;
+      player.rotationY = 0;
+
+      service.enqueueInput('socket-1', {
+        seq: 1,
+        forward: true,
+        backward: false,
+        left: false,
+        right: true,
+        handbrake: false,
+        jump: false,
+        interact: false,
+        dt: 0.05,
+        timestamp: Date.now(),
+      });
+
+      service.stepSimulation(0.05);
+
+      expect(player.speed).toBeGreaterThan(0);
+      expect(player.x).toBeGreaterThan(0);
+      expect(player.z).toBeGreaterThan(0);
+    });
+
+    it('should smoothly decelerate to zero speed when all directional inputs are released', () => {
+      const player = service.addPlayer('socket-1', 'DeceleratingHero');
+      player.x = 0;
+      player.z = 0;
+      player.speed = 5.0;
+
+      service.enqueueInput('socket-1', {
+        seq: 1,
+        forward: false,
+        backward: false,
+        left: false,
+        right: false,
+        handbrake: false,
+        jump: false,
+        interact: false,
+        dt: 0.05,
+        timestamp: Date.now(),
+      });
+
+      service.stepSimulation(0.05);
+      expect(player.speed).toBeLessThan(5.0);
+
+      // Advance several ticks without input
+      for (let i = 2; i <= 20; i++) {
+        service.enqueueInput('socket-1', {
+          seq: i,
+          forward: false,
+          backward: false,
+          left: false,
+          right: false,
+          handbrake: false,
+          jump: false,
+          interact: false,
+          dt: 0.05,
+          timestamp: Date.now() + i * 50,
+        });
+        service.stepSimulation(0.05);
+      }
+
+      expect(player.speed).toBe(0);
+    });
   });
 
   describe('Vehicle Interaction and Driving', () => {
