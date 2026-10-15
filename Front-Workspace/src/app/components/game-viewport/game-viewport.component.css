@@ -1575,4 +1575,131 @@ iconify-icon {
   font-weight: 600;
 }
 
+/* ==========================================================================
+   FASE 7.3: Overlay de Morte do Jogador (VOCÊ MORREU)
+   ========================================================================== */
+
+.player-death-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
+  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.82) 0%, rgba(2, 6, 23, 0.96) 75%),
+              radial-gradient(circle at center, rgba(220, 38, 38, 0.35) 0%, rgba(0, 0, 0, 0.6) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: deathFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: auto;
+}
+
+.death-card {
+  background: linear-gradient(145deg, #1e1b2e 0%, #0f172a 100%);
+  border: 2px solid rgba(239, 68, 68, 0.65);
+  box-shadow: 0 0 60px rgba(220, 38, 38, 0.45), 0 20px 40px rgba(0, 0, 0, 0.8);
+  border-radius: 24px;
+  padding: 2.5rem 3rem;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  animation: deathCardPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.death-icon-glow {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.3) 0%, rgba(239, 68, 68, 0.05) 70%);
+  border: 2px solid #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.8rem;
+  color: #ef4444;
+  filter: drop-shadow(0 0 15px rgba(239, 68, 68, 0.7));
+  animation: deathPulse 1.8s infinite ease-in-out;
+}
+
+.death-heading {
+  font-size: 2.4rem;
+  font-weight: 900;
+  color: #f87171;
+  letter-spacing: 2px;
+  margin: 0;
+  text-shadow: 0 0 20px rgba(239, 68, 68, 0.8), 0 4px 8px rgba(0, 0, 0, 0.8);
+}
+
+.death-subtext {
+  font-size: 1rem;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.respawn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 9999px;
+  padding: 8px 18px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #fca5a5;
+  letter-spacing: 0.5px;
+}
+
+.spin-slow {
+  animation: spin 3s linear infinite;
+}
+
+.btn-respawn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 28px;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 18px rgba(239, 68, 68, 0.5);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.btn-respawn:hover {
+  filter: brightness(1.15);
+  transform: translateY(-2px);
+}
+
+@keyframes deathFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes deathCardPop {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes deathPulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 15px rgba(239, 68, 68, 0.7)); }
+  50% { transform: scale(1.08); filter: drop-shadow(0 0 25px rgba(239, 68, 68, 1)); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 

@@ -23,7 +23,7 @@ import {
   WEAPON_CATALOG,
   WeaponType,
 } from '../../core/engine';
-import { NetworkService, WorldStateSnapshot } from '../../core/network';
+import { NetworkService, ProjectileSnapshot, WorldStateSnapshot } from '../../core/network';
 import {
   FloatingCombatText,
   PlayerOverheadTag,
@@ -108,6 +108,11 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
   // Barra de Vida (HP do Piloto e Overhead Tags Flutuantes)
   public readonly pilotHealth = signal(100);
   public readonly pilotMaxHealth = signal(100);
+
+  // Sinal de Morte do Jogador Local (Tela VOCÊ MORREU)
+  public readonly isPlayerDead = signal(false);
+
+  private serverProjectiles: ProjectileSnapshot[] = [];
   public readonly overheadTags = signal<PlayerOverheadTag[]>([]);
 
   // Sistema de Ciclo Dia e Noite Dinâmico
@@ -1067,15 +1072,24 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     const legGeo = new THREE.BoxGeometry(0.38, 0.9, 0.45);
-    const leftLeg = new THREE.Mesh(legGeo, legsMat);
-    leftLeg.position.set(-0.25, 0.45, 0);
-    leftLeg.castShadow = true;
-    group.add(leftLeg);
 
+    // 1. Pivô da perna esquerda
+    const leftLegPivot = new THREE.Group();
+    leftLegPivot.position.set(-0.25, 0.9, 0);
+    const leftLeg = new THREE.Mesh(legGeo, legsMat);
+    leftLeg.position.set(0, -0.45, 0);
+    leftLeg.castShadow = true;
+    leftLegPivot.add(leftLeg);
+    group.add(leftLegPivot);
+
+    // 2. Pivô da perna direita
+    const rightLegPivot = new THREE.Group();
+    rightLegPivot.position.set(0.25, 0.9, 0);
     const rightLeg = new THREE.Mesh(legGeo, legsMat);
-    rightLeg.position.set(0.25, 0.45, 0);
+    rightLeg.position.set(0, -0.45, 0);
     rightLeg.castShadow = true;
-    group.add(rightLeg);
+    rightLegPivot.add(rightLeg);
+    group.add(rightLegPivot);
 
     const hipsGeo = new THREE.BoxGeometry(0.92, 0.25, 0.5);
     const hips = new THREE.Mesh(hipsGeo, hipsMat);
@@ -1107,15 +1121,31 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
     group.add(visor);
 
     const armGeo = new THREE.BoxGeometry(0.26, 0.85, 0.3);
-    const leftArm = new THREE.Mesh(armGeo, torsoMat);
-    leftArm.position.set(-0.68, 1.65, 0);
-    leftArm.castShadow = true;
-    group.add(leftArm);
 
+    // 3. Pivô do braço esquerdo
+    const leftArmPivot = new THREE.Group();
+    leftArmPivot.position.set(-0.68, 2.05, 0);
+    const leftArm = new THREE.Mesh(armGeo, torsoMat);
+    leftArm.position.set(0, -0.4, 0);
+    leftArm.castShadow = true;
+    leftArmPivot.add(leftArm);
+    group.add(leftArmPivot);
+
+    // 4. Pivô do braço direito
+    const rightArmPivot = new THREE.Group();
+    rightArmPivot.position.set(0.68, 2.05, 0);
     const rightArm = new THREE.Mesh(armGeo, torsoMat);
-    rightArm.position.set(0.68, 1.65, 0);
+    rightArm.position.set(0, -0.4, 0);
     rightArm.castShadow = true;
-    group.add(rightArm);
+    rightArmPivot.add(rightArm);
+    group.add(rightArmPivot);
+
+    group.userData = {
+      leftLegPivot,
+      rightLegPivot,
+      leftArmPivot,
+      rightArmPivot,
+    };
 
     return group;
   }
@@ -1124,11 +1154,16 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
    * Processa snapshots autoritativos recebidos do servidor NestJS:
    * 1. Reconciliação do jogador local.
    * 2. Criação/atualização/remoção das malhas dos jogadores remotos.
+   * 3. Sincronização dos projéteis autoritativos do servidor.
    */
   public handleServerSnapshot(snapshot: WorldStateSnapshot): void {
     const localId = this.networkService.localPlayerId();
     if (localId) {
       this.world.reconcileServerSnapshot(snapshot, localId);
+    }
+
+    if (snapshot.projectiles) {
+      this.serverProjectiles = snapshot.projectiles;
     }
 
     const currentRemoteIds = new Set<string>();
@@ -1138,6 +1173,12 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
         if (typeof player.health === 'number') {
           this.world.heroHealth = player.health;
           this.pilotHealth.set(player.health);
+
+          if (player.health <= 0) {
+            this.isPlayerDead.set(true);
+          } else if (this.isPlayerDead()) {
+            this.isPlayerDead.set(false);
+          }
         }
         if (typeof player.maxHealth === 'number') {
           this.world.heroMaxHealth = player.maxHealth;
@@ -1157,6 +1198,10 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
 
         visual = {
           mesh,
+          leftLegPivot: mesh.userData['leftLegPivot'],
+          rightLegPivot: mesh.userData['rightLegPivot'],
+          leftArmPivot: mesh.userData['leftArmPivot'],
+          rightArmPivot: mesh.userData['rightArmPivot'],
           currentX: player.x,
           currentY: player.y,
           currentZ: player.z,
@@ -1259,6 +1304,7 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
     this.world.resetMatch();
     this.matchState.set('waiting');
     this.isPlayerReady.set(false);
+    this.isPlayerDead.set(false);
     this.networkService.setPlayerReady(false);
     this.currentWave.set(1);
     this.enemiesRemaining.set(0);
@@ -1406,6 +1452,7 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const activeIds = new Set<string>();
 
+    // 1. Projéteis da simulação local
     for (const p of this.world.activeProjectiles) {
       activeIds.add(p.id);
       let mesh = this.projectileMeshes.get(p.id);
@@ -1418,6 +1465,23 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
 
       mesh.position.set(p.x, p.y, p.z);
       if (!p.isMine && (p.vx !== 0 || p.vy !== 0 || p.vz !== 0)) {
+        mesh.lookAt(p.x + p.vx, p.y + p.vy, p.z + p.vz);
+      }
+    }
+
+    // 2. Projéteis autoritativos do servidor (disparos dos outros jogadores na sala)
+    for (const p of this.serverProjectiles) {
+      activeIds.add(p.id);
+      let mesh = this.projectileMeshes.get(p.id);
+
+      if (!mesh) {
+        mesh = this.createProjectileMesh(p.weaponType);
+        this.scene.add(mesh);
+        this.projectileMeshes.set(p.id, mesh);
+      }
+
+      mesh.position.set(p.x, p.y, p.z);
+      if (p.weaponType !== 'spring_mine' && (p.vx !== 0 || p.vy !== 0 || p.vz !== 0)) {
         mesh.lookAt(p.x + p.vx, p.y + p.vy, p.z + p.vz);
       }
     }
@@ -2302,7 +2366,26 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
         visual.currentRotationY += rotDiff * remoteLerpSpeed;
       }
 
-      visual.mesh.position.set(visual.currentX, visual.currentY, visual.currentZ);
+      // Animação procedural dos membros e caminhada do outro jogador
+      const isMoving = distSq > 0.0004;
+      let visualY = visual.currentY;
+
+      if (isMoving) {
+        visualY += Math.abs(Math.sin(time * 12.0)) * 0.06;
+        const swing = Math.sin(time * 12.0) * 0.75;
+        if (visual.leftLegPivot) visual.leftLegPivot.rotation.x = swing;
+        if (visual.rightLegPivot) visual.rightLegPivot.rotation.x = -swing;
+        if (visual.leftArmPivot) visual.leftArmPivot.rotation.x = -swing * 0.65;
+        if (visual.rightArmPivot) visual.rightArmPivot.rotation.x = swing * 0.65;
+      } else {
+        const idleLerp = Math.min(1, delta * 10.0);
+        if (visual.leftLegPivot) visual.leftLegPivot.rotation.x += (0 - visual.leftLegPivot.rotation.x) * idleLerp;
+        if (visual.rightLegPivot) visual.rightLegPivot.rotation.x += (0 - visual.rightLegPivot.rotation.x) * idleLerp;
+        if (visual.leftArmPivot) visual.leftArmPivot.rotation.x += (0 - visual.leftArmPivot.rotation.x) * idleLerp;
+        if (visual.rightArmPivot) visual.rightArmPivot.rotation.x += (0 - visual.rightArmPivot.rotation.x) * idleLerp;
+      }
+
+      visual.mesh.position.set(visual.currentX, visualY, visual.currentZ);
       visual.mesh.rotation.y = visual.currentRotationY;
     }
 

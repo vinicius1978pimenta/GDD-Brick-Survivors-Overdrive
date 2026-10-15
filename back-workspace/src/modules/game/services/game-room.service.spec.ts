@@ -186,7 +186,7 @@ describe('GameRoomService', () => {
     it('should limit pending inputs queue size to prevent unbounded growth', () => {
       service.addPlayer('socket-1', 'Player1');
 
-      for (let i = 1; i <= 20; i++) {
+      for (let i = 1; i <= 40; i++) {
         const input: PlayerInputDto = {
           seq: i,
           forward: true,

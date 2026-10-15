@@ -436,6 +436,36 @@
     </div>
   }
 
+  <!-- FASE 7.3: Overlay de Morte do Jogador: VOCÊ MORREU -->
+  @if (isPlayerDead() && hasJoinedArena()) {
+    <div class="player-death-overlay" role="alert" aria-live="assertive">
+      <div class="death-card">
+        <div class="death-icon-glow">
+          <iconify-icon icon="mdi:skull-crossbones"></iconify-icon>
+        </div>
+        <h1 class="death-heading">VOCÊ MORREU!</h1>
+        <p class="death-subtext">
+          @if (gameMode() === 'pvp_deathmatch') {
+            Seu piloto foi desmontado em combate! Renascendo na arena...
+          } @else {
+            Você foi desmontado pelos invasores de blocos!
+          }
+        </p>
+        @if (gameMode() === 'pvp_deathmatch') {
+          <div class="respawn-pill">
+            <iconify-icon icon="mdi:reload-alert" class="spin-slow"></iconify-icon>
+            <span>RENASCENDO EM INSTANTES...</span>
+          </div>
+        } @else {
+          <button type="button" class="btn-respawn" (click)="restartMatch()">
+            <iconify-icon icon="mdi:restart"></iconify-icon>
+            <span>REINICIAR BATALHA</span>
+          </button>
+        }
+      </div>
+    </div>
+  }
+
   <!-- FASE 7.2: Tela Inicial de Entrada / Lobby (Nome do Jogador & Suporte Multi-Navegador) -->
   @if (!hasJoinedArena()) {
     <div class="arena-entrance-backdrop" role="dialog" aria-modal="true" aria-label="Entrar na Arena">

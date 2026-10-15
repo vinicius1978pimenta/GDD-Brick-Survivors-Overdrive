@@ -5,6 +5,11 @@ import * as THREE from 'three';
  */
 export interface RemotePlayerVisual {
   mesh: THREE.Group;
+  leftLegPivot?: THREE.Group;
+  rightLegPivot?: THREE.Group;
+  leftArmPivot?: THREE.Group;
+  rightArmPivot?: THREE.Group;
+  isMoving?: boolean;
   currentX: number;
   currentY: number;
   currentZ: number;
