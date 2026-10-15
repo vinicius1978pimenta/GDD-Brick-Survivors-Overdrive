@@ -117,3 +117,10 @@ npm run test
 # 3. Executar o build para verificar tipos do TypeScript
 npm run build
 ```
+
+### 5.1 Auditoria de Separação de Interfaces (`interfaces/`)
+O auditor de QA deve obrigatoriamente inspecionar e validar:
+1. **Pastas Dedicadas Obrigatórias**: Todas as interfaces e definições de contratos de tipos devem residir em pastas dedicadas (`interfaces/`, `types/` ou `dto/`).
+2. **Sem Interfaces Soltas em Arquivos de Implementação**: Nenhum arquivo `.service.ts`, `.controller.ts`, `.gateway.ts`, `.component.ts` ou `.system.ts` pode declarar interfaces estruturais no mesmo arquivo de sua classe/lógica principal.
+3. **Legibilidade e Reutilização**: Interfaces devem ser exportadas a partir de seus arquivos dedicados, permitindo que serviços, testes unitários e mocks as importem sem acoplamento a implementações concretas. Qualquer violação deve ser apontada como ressalva arquitetural.
+

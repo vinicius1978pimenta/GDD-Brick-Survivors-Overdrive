@@ -1,0 +1,152 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Server, Socket } from 'socket.io';
+import { JoinGameDto } from '../dto/join-game.dto.js';
+import { PlayerInputDto } from '../dto/player-input.dto.js';
+import { GameGateway } from './game.gateway.js';
+import { GameRoomService } from '../services/game-room.service.js';
+
+type MockSocketContext = {
+  socket: Socket;
+  emitMock: ReturnType<typeof vi.fn>;
+  joinMock: ReturnType<typeof vi.fn>;
+};
+
+describe('GameGateway', () => {
+  let gateway: GameGateway;
+  let gameRoomService: GameRoomService;
+
+  beforeEach(() => {
+    gameRoomService = new GameRoomService();
+    gateway = new GameGateway(gameRoomService);
+  });
+
+  function createMockSocketContext(id = 'socket-test-1'): MockSocketContext {
+    const emitMock = vi.fn();
+    const joinMock = vi.fn().mockResolvedValue(undefined);
+
+    const socket = {
+      id,
+      emit: emitMock,
+      join: joinMock,
+    } as unknown as Socket;
+
+    return {
+      socket,
+      emitMock,
+      joinMock,
+    };
+  }
+
+  function createMockServer(): Server {
+    const toMock = vi.fn().mockReturnValue({
+      emit: vi.fn(),
+    });
+
+    const serverMock = {
+      to: toMock,
+    } as unknown as Server;
+
+    return serverMock;
+  }
+
+  describe('Lifecycle and Initialization', () => {
+    it('should initialize gateway and attach server to gameRoomService', () => {
+      const serverMock = createMockServer();
+      const setServerSpy = vi.spyOn(gameRoomService, 'setServer');
+
+      gateway.afterInit(serverMock);
+
+      expect(setServerSpy).toHaveBeenCalledWith(serverMock);
+    });
+
+    it('should handle client connection without errors', () => {
+      const { socket } = createMockSocketContext('client-1');
+      expect(() => gateway.handleConnection(socket)).not.toThrow();
+    });
+
+    it('should remove player on client disconnect', () => {
+      gameRoomService.addPlayer('client-1', 'Pilot');
+      expect(gameRoomService.getPlayerCount()).toBe(1);
+
+      const { socket } = createMockSocketContext('client-1');
+      gateway.handleDisconnect(socket);
+
+      expect(gameRoomService.getPlayerCount()).toBe(0);
+    });
+  });
+
+  describe('joinGame event', () => {
+    it('should add player to room and return confirmation payload', async () => {
+      const { socket, joinMock } = createMockSocketContext('client-xyz');
+      const payload: JoinGameDto = { playerName: 'CommanderBrick' };
+
+      const response = await gateway.handleJoinGame(socket, payload);
+
+      expect(joinMock).toHaveBeenCalledWith('game-room');
+      expect(response.status).toBe('ok');
+      expect(response.playerId).toBe('client-xyz');
+      expect(response.name).toBe('CommanderBrick');
+      expect(typeof response.tick).toBe('number');
+      expect(gameRoomService.getPlayer('client-xyz')?.name).toBe('CommanderBrick');
+    });
+
+    it('should handle joinGame with default name when payload is omitted', async () => {
+      const { socket } = createMockSocketContext('socket-auto');
+
+      const response = await gateway.handleJoinGame(socket);
+
+      expect(response.status).toBe('ok');
+      expect(response.name).toBe('Hero_sock');
+    });
+  });
+
+  describe('playerInput event', () => {
+    it('should forward player input to gameRoomService queue', () => {
+      gameRoomService.addPlayer('client-1', 'Player1');
+
+      const input: PlayerInputDto = {
+        seq: 42,
+        forward: true,
+        backward: false,
+        left: false,
+        right: false,
+        handbrake: false,
+        jump: false,
+        interact: false,
+        dt: 0.05,
+        timestamp: 123456789,
+      };
+
+      const { socket } = createMockSocketContext('client-1');
+      gateway.handlePlayerInput(socket, input);
+
+      const player = gameRoomService.getPlayer('client-1');
+      expect(player?.pendingInputs.length).toBe(1);
+      expect(player?.pendingInputs[0].seq).toBe(42);
+    });
+  });
+
+  describe('ping and latency measurement', () => {
+    it('should respond to ping with pong and timestamps for RTT calculation', () => {
+      const { socket, emitMock } = createMockSocketContext('client-1');
+      const clientTs = 1700000000000;
+
+      const response = gateway.handlePing(socket, { clientTimestamp: clientTs });
+
+      expect(response.clientTimestamp).toBe(clientTs);
+      expect(typeof response.serverTimestamp).toBe('number');
+      expect(response.serverTimestamp).toBeGreaterThanOrEqual(clientTs);
+      expect(emitMock).toHaveBeenCalledWith('pong', response);
+    });
+
+    it('should fallback to Date.now() when clientTimestamp is missing', () => {
+      const { socket, emitMock } = createMockSocketContext('client-1');
+
+      const response = gateway.handlePing(socket);
+
+      expect(typeof response.clientTimestamp).toBe('number');
+      expect(typeof response.serverTimestamp).toBe('number');
+      expect(emitMock).toHaveBeenCalledWith('pong', response);
+    });
+  });
+});

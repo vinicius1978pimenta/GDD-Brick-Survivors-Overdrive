@@ -1,0 +1,105 @@
+<div #viewportContainer class="viewport-container" tabindex="0" role="region" aria-label="Visualizador da Arena 3D de Blocos">
+  <canvas #renderCanvas class="render-canvas"></canvas>
+
+  <!-- Top Left: Brand & Status -->
+  <div class="hud-top-left" aria-hidden="true">
+    <div class="badge-brand">
+      <span class="stud-dot"></span>
+      <span>Brick Survivors: Overdrive</span>
+    </div>
+
+    <!-- Badge de Rede Multiplayer -->
+    <div
+      class="badge-network"
+      [class.network-online]="networkService.isConnected()"
+      [class.network-offline]="!networkService.isConnected()"
+    >
+      <span class="network-dot"></span>
+      <span class="network-status">{{ networkService.isConnected() ? 'ONLINE' : 'OFFLINE' }}</span>
+      @if (networkService.isConnected()) {
+        <span class="network-ping">{{ networkService.pingMs() }} ms</span>
+      }
+    </div>
+
+    <div class="mode-badge" [class.mode-driving]="isDriving()">
+      <span class="mode-icon">{{ isDriving() ? '🏎️' : '🚶' }}</span>
+      <span class="mode-text">{{ isDriving() ? 'PILOTANDO BUGGY' : 'A PÉ (HERÓI)' }}</span>
+    </div>
+  </div>
+
+  <!-- Top Right: Speedometer & Drift Alert -->
+  <div class="hud-top-right" aria-hidden="true">
+    <div class="speedometer-card">
+      <div class="speed-value">
+        <span class="speed-number">{{ speedKmh() }}</span>
+        <span class="speed-unit">KM/H</span>
+      </div>
+      <div class="speed-bar-container">
+        <div class="speed-bar-fill" [style.width.%]="speedPercentage()"></div>
+      </div>
+    </div>
+
+    @if (isDriving()) {
+      <!-- Card de Integridade da Blindagem (Blocos LEGO) -->
+      <div class="durability-card" [class.durability-low]="durabilityPercentage() < 35" [class.durability-mid]="durabilityPercentage() < 70 && durabilityPercentage() >= 35">
+        <div class="durability-header">
+          <span class="durability-icon">🛡️</span>
+          <span class="durability-title">BLINDAGEM</span>
+          <span class="durability-val">{{ durabilityPercentage() }}%</span>
+        </div>
+        <div class="durability-bar-container">
+          <div class="durability-bar-fill" [style.width.%]="durabilityPercentage()"></div>
+        </div>
+      </div>
+    }
+
+    @if (isDrifting()) {
+      <div class="badge-drift">
+        <span class="drift-flame">🔥</span>
+        <span>DRIFT OVERDRIVE!</span>
+      </div>
+    }
+  </div>
+
+  <!-- Center Action Prompt (Interação E) -->
+  <div class="hud-center-action" aria-live="polite">
+    @if (!isDriving() && canInteract()) {
+      <div class="prompt-interact">
+        <kbd class="key-hint">E</kbd>
+        <span class="prompt-label">Dirigir Buggy de Blocos</span>
+      </div>
+    } @else if (isDriving() && canDismount()) {
+      <div class="prompt-dismount">
+        <kbd class="key-hint">E</kbd>
+        <span class="prompt-label">Desembarcar do Veículo</span>
+      </div>
+    }
+  </div>
+
+  <!-- Bottom: Controls Help -->
+  <div class="instructions-panel" aria-hidden="true">
+    <div class="instruction-item">
+      <kbd>W A S D</kbd>
+      <span>{{ isDriving() ? 'Acelerar / Marcha Ré / Curva' : 'Movimento do Herói' }}</span>
+    </div>
+    <div class="instruction-item">
+      <kbd>Espaço</kbd>
+      <span>{{ isDriving() ? 'Freio de Mão & Drift' : 'Pular' }}</span>
+    </div>
+    @if (isDriving() && canDismount()) {
+      <div class="instruction-item">
+        <kbd>E</kbd>
+        <span>Desembarcar</span>
+      </div>
+    } @else if (!isDriving() && canInteract()) {
+      <div class="instruction-item">
+        <kbd>E</kbd>
+        <span>Entrar</span>
+      </div>
+    }
+    <div class="instruction-item">
+      <kbd>Mouse</kbd>
+      <span>Girar Câmera</span>
+    </div>
+  </div>
+</div>

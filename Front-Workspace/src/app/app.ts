@@ -1,12 +1,16 @@
-import { Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { GameViewportComponent } from './components/game-viewport';
 
 @Component({
-  imports: [RouterOutlet],
   selector: 'app-root',
-  styleUrl: './app.css',
+  standalone: true,
+  imports: [RouterOutlet, GameViewportComponent],
   templateUrl: './app.html',
+  styleUrl: './app.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class App {
-  protected readonly title = signal('Front-Workspace');
+  protected readonly title = signal('Brick Survivors: Overdrive');
+  protected readonly phase = signal('FASE 4: Sistema Modular de Blocos & Destruição LEGO');
 }
