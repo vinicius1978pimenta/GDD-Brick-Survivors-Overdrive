@@ -284,7 +284,7 @@ describe('GameRoomService', () => {
       service.stepSimulation(0.05);
 
       expect(player.speed).toBeGreaterThan(0);
-      expect(player.x).toBeGreaterThan(0);
+      expect(player.x).toBeLessThan(0);
     });
 
     it('should strafe laterally to the left when left input is active', () => {
@@ -309,7 +309,7 @@ describe('GameRoomService', () => {
       service.stepSimulation(0.05);
 
       expect(player.speed).toBeGreaterThan(0);
-      expect(player.x).toBeLessThan(0);
+      expect(player.x).toBeGreaterThan(0);
     });
 
     it('should combine forward and strafe inputs diagonally with normalized vector', () => {
@@ -334,7 +334,7 @@ describe('GameRoomService', () => {
       service.stepSimulation(0.05);
 
       expect(player.speed).toBeGreaterThan(0);
-      expect(player.x).toBeGreaterThan(0);
+      expect(player.x).toBeLessThan(0);
       expect(player.z).toBeGreaterThan(0);
     });
 

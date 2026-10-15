@@ -193,4 +193,117 @@ describe('Combat System & LEGO Arsenal', () => {
     expect(damageEvents[0].amount).toBe(50);
     expect(active.length).toBe(0); // Mina consumida na explosão
   });
+
+  it('deve disparar para o céu aberto com vy > 0 e atualizar altitude vertical ascendentemente', () => {
+    const pool = createProjectilePool(8);
+    const active: ProjectileEntity[] = [];
+    const grid = new SpatialHashGrid(8);
+    const debrisPool = new ObjectPool<DebrisParticle>(createDebrisFactory(), undefined, 8);
+    const activeDebris: DebrisParticle[] = [];
+    const vehicleTransform: TransformComponent = { x: 50, y: 0, z: 50, rotationY: 0 };
+    const modularVehicle: ModularVehicleComponent = {
+      blocks: createDefaultBuggyBlocks(),
+      durabilityPercentage: 100,
+      mass: 850,
+    };
+
+    // Dispara apontando para o céu (+Y e +Z)
+    const spawned = spawnProjectiles(
+      'stud_blaster',
+      'hero_1',
+      { x: 0, y: 1.2, z: 0 },
+      { x: 0, y: 1, z: 1 },
+      pool,
+      active,
+    );
+
+    expect(spawned).toBe(1);
+    expect(active.length).toBe(1);
+    const proj = active[0];
+    expect(proj.vy).toBeGreaterThan(0);
+    const initialY = proj.y;
+
+    // Simula 0.1s de física
+    updateCombatSystem(
+      active,
+      pool,
+      grid,
+      0.1,
+      DEFAULT_ARENA_BOUNDS,
+      vehicleTransform,
+      modularVehicle,
+      debrisPool,
+      activeDebris,
+    );
+
+    expect(proj.y).toBeGreaterThan(initialY);
+  });
+
+  it('deve desativar projéteis balísticos ao colidirem com o solo ou atingirem o teto', () => {
+    const pool = createProjectilePool(8);
+    const active: ProjectileEntity[] = [];
+    const grid = new SpatialHashGrid(8);
+    const debrisPool = new ObjectPool<DebrisParticle>(createDebrisFactory(), undefined, 8);
+    const activeDebris: DebrisParticle[] = [];
+    const vehicleTransform: TransformComponent = { x: 50, y: 0, z: 50, rotationY: 0 };
+    const modularVehicle: ModularVehicleComponent = {
+      blocks: createDefaultBuggyBlocks(),
+      durabilityPercentage: 100,
+      mass: 850,
+    };
+
+    // 1. Projétil apontando para baixo (chão)
+    spawnProjectiles(
+      'stud_blaster',
+      'hero_1',
+      { x: 0, y: 0.5, z: 0 },
+      { x: 0, y: -1, z: 0.1 },
+      pool,
+      active,
+    );
+
+    expect(active[0].vy).toBeLessThan(0);
+
+    // Atualiza física por 0.1s: deve atingir o chão (p.y < 0) e ser reciclado
+    updateCombatSystem(
+      active,
+      pool,
+      grid,
+      0.1,
+      DEFAULT_ARENA_BOUNDS,
+      vehicleTransform,
+      modularVehicle,
+      debrisPool,
+      activeDebris,
+    );
+
+    expect(active.length).toBe(0);
+
+    // 2. Projétil atingindo teto (> 100m)
+    const skyProj = pool.acquire();
+    skyProj.active = true;
+    skyProj.isMine = false;
+    skyProj.remainingLife = 5;
+    skyProj.x = 0;
+    skyProj.y = 99.5;
+    skyProj.z = 0;
+    skyProj.vx = 0;
+    skyProj.vy = 20;
+    skyProj.vz = 0;
+    active.push(skyProj);
+
+    updateCombatSystem(
+      active,
+      pool,
+      grid,
+      0.1,
+      DEFAULT_ARENA_BOUNDS,
+      vehicleTransform,
+      modularVehicle,
+      debrisPool,
+      activeDebris,
+    );
+
+    expect(active.length).toBe(0); // Excedeu teto e foi liberado
+  });
 });

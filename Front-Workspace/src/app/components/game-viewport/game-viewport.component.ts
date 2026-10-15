@@ -103,14 +103,17 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   // Parâmetros orbitais da câmera adaptativa
   private targetTheta = Math.PI;
   private currentTheta = Math.PI;
-  private targetPhi = Math.PI / 2.55;
-  private currentPhi = Math.PI / 2.55;
-  private targetRadius = 7.5;
-  private currentRadius = 7.5;
+  private targetPhi = Math.PI / 2.85;
+  private currentPhi = Math.PI / 2.85;
+  private targetRadius = 8.0;
+  private currentRadius = 8.0;
 
   private lookAtX = 0;
-  private lookAtY = 1.05;
+  private lookAtY = 1.45;
   private lookAtZ = 0;
+
+  private wasDriving = false;
+  private lastVehicleRotationY = 0;
 
   private isDragging = false;
   private previousPointerX = 0;
@@ -218,12 +221,16 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.scene.background = new THREE.Color(0x101622);
     this.scene.fog = new THREE.FogExp2(0x101622, 0.022);
 
-    this.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
+    this.camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 1000);
     this.targetTheta = this.world.heroTransform.rotationY + Math.PI;
     this.currentTheta = this.targetTheta;
+    this.targetRadius = 8.0;
+    this.currentRadius = 8.0;
     this.lookAtX = this.world.heroTransform.x;
-    this.lookAtY = 1.05;
+    this.lookAtY = 1.45;
     this.lookAtZ = this.world.heroTransform.z;
+    this.wasDriving = this.world.isDriving();
+    this.lastVehicleRotationY = this.world.vehicleTransform.rotationY;
     this.updateCameraPosition();
 
     this.setupLighting();
@@ -874,15 +881,20 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       this.rightHandWeaponSocket.visible = true;
     }
 
-    // 1. Tratamento do Recuo de Tiro (Recoil)
+    // 1. Tratamento do Recuo de Tiro (Recoil) com mira 3D
     let isRecoilActive = false;
+    const aimDx = this.aimTarget3D.x - hero.x;
+    const aimDy = this.aimTarget3D.y - (hero.y + 1.2);
+    const aimDz = this.aimTarget3D.z - hero.z;
+    const aimPitch = Math.atan2(aimDy, Math.hypot(aimDx, aimDz));
+
     if (this.shootRecoilTimer > 0) {
       this.shootRecoilTimer = Math.max(0, this.shootRecoilTimer - delta);
       isRecoilActive = true;
       const progress = this.shootRecoilTimer / 0.22; // 1 -> 0
 
-      // Braço direito sobe mirando e recua com coice
-      this.heroRightArmPivot.rotation.x = -Math.PI / 2.05 + progress * 0.42;
+      // Braço direito sobe mirando com base no pitch 3D e recua com coice
+      this.heroRightArmPivot.rotation.x = -Math.PI / 2.05 - aimPitch + progress * 0.42;
       this.heroRightArmPivot.rotation.y = 0.12;
       this.heroRightArmPivot.rotation.z = -0.05;
     }
@@ -1121,12 +1133,13 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
         };
 
     const dx = this.aimTarget3D.x - origin.x;
+    const dy = this.aimTarget3D.y - origin.y;
     const dz = this.aimTarget3D.z - origin.z;
-    const dist = Math.hypot(dx, dz);
+    const dist3D = Math.hypot(dx, dy, dz);
 
     let direction: Vector3D;
-    if (dist > 0.05) {
-      direction = { x: dx / dist, y: 0, z: dz / dist };
+    if (dist3D > 0.05) {
+      direction = { x: dx / dist3D, y: dy / dist3D, z: dz / dist3D };
     } else {
       const angle = isDriving
         ? this.world.vehicleTransform.rotationY
@@ -1134,13 +1147,20 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       direction = { x: Math.sin(angle), y: 0, z: Math.cos(angle) };
     }
 
-    // Quando a pé, gira o corpo na direção da mira estilo Twin-Stick Shooter
-    if (!isDriving && dist > 0.05) {
+    // Quando a pé, gira o corpo na direção horizontal da mira estilo Twin-Stick Shooter
+    const distHorizontal = Math.hypot(dx, dz);
+    if (!isDriving && distHorizontal > 0.05) {
       const aimAngle = Math.atan2(dx, dz);
       this.world.heroTransform.rotationY = aimAngle;
       if (this.heroGroup) {
         this.heroGroup.rotation.y = aimAngle;
       }
+    }
+
+    // Ajusta a inclinação do braço do herói conforme o ângulo de pitch 3D
+    if (this.heroRightArmPivot && !isDriving) {
+      const pitch = Math.atan2(dy, Math.hypot(dx, dz));
+      this.heroRightArmPivot.rotation.x = -Math.PI / 2.05 - pitch;
     }
 
     const shootResult = this.world.shootCurrentWeapon(origin, direction);
@@ -1247,8 +1267,8 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       }
 
       mesh.position.set(p.x, p.y, p.z);
-      if (!p.isMine && (p.vx !== 0 || p.vz !== 0)) {
-        mesh.rotation.y = Math.atan2(p.vx, p.vz);
+      if (!p.isMine && (p.vx !== 0 || p.vy !== 0 || p.vz !== 0)) {
+        mesh.lookAt(p.x + p.vx, p.y + p.vy, p.z + p.vz);
       }
     }
 
@@ -1524,10 +1544,16 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     const cosTheta = Math.cos(this.currentTheta);
 
     this.camera.position.x = this.lookAtX + this.currentRadius * sinPhi * sinTheta;
-    this.camera.position.y = this.lookAtY + this.currentRadius * cosPhi;
+    this.camera.position.y = Math.max(0.4, this.lookAtY + this.currentRadius * cosPhi);
     this.camera.position.z = this.lookAtZ + this.currentRadius * sinPhi * cosTheta;
 
-    this.camera.lookAt(this.lookAtX, this.lookAtY, this.lookAtZ);
+    let targetLookAtY = this.lookAtY;
+    if (this.currentPhi > Math.PI / 2) {
+      const skyAngle = this.currentPhi - Math.PI / 2;
+      targetLookAtY += skyAngle * 7.0;
+    }
+
+    this.camera.lookAt(this.lookAtX, targetLookAtY, this.lookAtZ);
   }
 
   private setupResizeObserver(): void {
@@ -1667,7 +1693,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       this.crosshairY.set(event.clientY);
     }
 
-    // 2. Raycasting 3D no plano horizontal da arena (Y = 0)
+    // 2. Raycasting 3D no plano da arena ou projeção para o céu aberto
     const canvas = this.canvasRef?.nativeElement;
     if (canvas && this.camera) {
       const rect = canvas.getBoundingClientRect();
@@ -1679,18 +1705,26 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
 
       this.raycaster.setFromCamera(this.mouseNDC, this.camera);
       const hitPoint = new THREE.Vector3();
-      if (this.raycaster.ray.intersectPlane(this.groundPlane, hitPoint)) {
-        this.aimTarget3D.copy(hitPoint);
+      const hasGroundHit =
+        this.raycaster.ray.direction.y < -0.02 &&
+        Boolean(this.raycaster.ray.intersectPlane(this.groundPlane, hitPoint)) &&
+        hitPoint.distanceTo(this.camera.position) < 100;
 
-        // Se a pé, orienta instantaneamente a rotação do herói na direção da mira do mouse
-        if (!this.world.isDriving()) {
-          const dx = hitPoint.x - this.world.heroTransform.x;
-          const dz = hitPoint.z - this.world.heroTransform.z;
-          if (Math.hypot(dx, dz) > 0.15) {
-            this.world.heroTransform.rotationY = Math.atan2(dx, dz);
-            if (this.heroGroup) {
-              this.heroGroup.rotation.y = this.world.heroTransform.rotationY;
-            }
+      if (hasGroundHit) {
+        this.aimTarget3D.copy(hitPoint);
+      } else {
+        // Ao apontar para o horizonte ou para o céu, projeta o ponto 3D no espaço a 50 unidades
+        this.raycaster.ray.at(50, this.aimTarget3D);
+      }
+
+      // Se a pé, orienta instantaneamente a rotação do herói na direção da mira do mouse
+      if (!this.world.isDriving()) {
+        const dx = this.aimTarget3D.x - this.world.heroTransform.x;
+        const dz = this.aimTarget3D.z - this.world.heroTransform.z;
+        if (Math.hypot(dx, dz) > 0.15) {
+          this.world.heroTransform.rotationY = Math.atan2(dx, dz);
+          if (this.heroGroup) {
+            this.heroGroup.rotation.y = this.world.heroTransform.rotationY;
           }
         }
       }
@@ -1715,7 +1749,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.userManualCameraRotation = true;
     const rotationSpeed = 0.005;
     this.targetTheta -= deltaX * rotationSpeed;
-    this.targetPhi = Math.max(0.2, Math.min(Math.PI / 2 - 0.08, this.targetPhi + deltaY * rotationSpeed));
+    this.targetPhi = Math.max(0.2, Math.min(Math.PI * 0.62, this.targetPhi - deltaY * rotationSpeed));
     this.idleTime = 0;
   }
 
@@ -1795,6 +1829,28 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     const vehicle = this.world.vehicleTransform;
     const vehicleComp = this.world.vehicleComponent;
 
+    // Detecta transição de entrada/saída do veículo para focar imediatamente nas costas
+    if (!this.wasDriving && isDriving) {
+      // Ao entrar no carro: foca imediatamente nas costas do veículo
+      const behindVehicleTheta = vehicle.rotationY + Math.PI;
+      this.targetTheta = behindVehicleTheta;
+      this.currentTheta = behindVehicleTheta;
+      this.targetPhi = Math.PI / 2.85;
+      this.currentPhi = Math.PI / 2.85;
+      this.targetRadius = 11.5;
+      this.currentRadius = 11.5;
+      this.idleTime = 0;
+      this.lastVehicleRotationY = vehicle.rotationY;
+    } else if (this.wasDriving && !isDriving) {
+      // Ao sair do carro: foca imediatamente nas costas do herói
+      const behindHeroTheta = hero.rotationY + Math.PI;
+      this.targetTheta = behindHeroTheta;
+      this.currentTheta = behindHeroTheta;
+      this.targetRadius = 8.0;
+      this.idleTime = 0;
+    }
+    this.wasDriving = isDriving;
+
     // 2. Atualização dos Meshes 3D
     if (this.heroGroup) {
       if (isDriving) {
@@ -1841,15 +1897,18 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     }
 
     // 3. Câmera em Terceira Pessoa Adaptativa
-    const targetTargetRadius = isDriving ? 10.5 : 7.5;
-    const targetTargetPhi = isDriving ? Math.PI / 2.55 : Math.PI / 2.55;
-
+    const targetTargetRadius = isDriving ? 11.5 : 8.0;
     const lerpFactor = Math.min(1, delta * 7.5);
     this.targetRadius += (targetTargetRadius - this.targetRadius) * (delta * 3.0);
-    this.targetPhi += (targetTargetPhi - this.targetPhi) * (delta * 3.0);
+
+    // Retorna suavemente à inclinação padrão apenas após inatividade prolongada (> 4.0 segundos)
+    if (this.idleTime > 4.0) {
+      const defaultTargetPhi = Math.PI / 2.85;
+      this.targetPhi += (defaultTargetPhi - this.targetPhi) * (delta * 1.5);
+    }
 
     const targetLookAtX = isDriving ? vehicle.x : hero.x;
-    const targetLookAtY = isDriving ? 0.85 : 1.05 + Math.max(0, hero.y * 0.45);
+    const targetLookAtY = isDriving ? 1.05 : 1.45 + Math.max(0, hero.y * 0.45);
     const targetLookAtZ = isDriving ? vehicle.z : hero.z;
 
     this.lookAtX += (targetLookAtX - this.lookAtX) * lerpFactor;
@@ -1858,14 +1917,28 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
 
     this.idleTime += delta;
 
-    // Alinhamento suave da câmera apenas quando dirigindo em velocidade e sem movimento manual recente
-    if (isDriving && Math.abs(vehicleComp.currentSpeed) > 1.5 && this.idleTime > 2.5) {
-      const behindVehicleTheta = vehicle.rotationY + Math.PI;
-      let thetaDiff = (behindVehicleTheta - this.targetTheta) % (Math.PI * 2);
-      if (thetaDiff > Math.PI) thetaDiff -= Math.PI * 2;
-      if (thetaDiff < -Math.PI) thetaDiff += Math.PI * 2;
+    if (isDriving) {
+      // 1. Conforme o veículo vira (curvas / esterçamento), a câmera acompanha a rotação mantendo o foco nas costas
+      let vehicleRotDelta = (vehicle.rotationY - this.lastVehicleRotationY) % (Math.PI * 2);
+      if (vehicleRotDelta > Math.PI) vehicleRotDelta -= Math.PI * 2;
+      if (vehicleRotDelta < -Math.PI) vehicleRotDelta += Math.PI * 2;
 
-      this.targetTheta += thetaDiff * Math.min(1, delta * 2.2);
+      this.targetTheta += vehicleRotDelta;
+      this.currentTheta += vehicleRotDelta;
+      this.lastVehicleRotationY = vehicle.rotationY;
+
+      // 2. Se o jogador não estiver mexendo o mouse ativamente (idleTime > 0.5s), alinha suavemente diretamente atrás do veículo
+      if (this.idleTime > 0.5) {
+        const behindVehicleTheta = vehicle.rotationY + Math.PI;
+        let thetaDiff = (behindVehicleTheta - this.targetTheta) % (Math.PI * 2);
+        if (thetaDiff > Math.PI) thetaDiff -= Math.PI * 2;
+        if (thetaDiff < -Math.PI) thetaDiff += Math.PI * 2;
+
+        const returnSpeed = Math.abs(vehicleComp.currentSpeed) > 1.0 ? 4.5 : 2.5;
+        this.targetTheta += thetaDiff * Math.min(1, delta * returnSpeed);
+      }
+    } else {
+      this.lastVehicleRotationY = vehicle.rotationY;
     }
 
     this.currentTheta += (this.targetTheta - this.currentTheta) * lerpFactor;

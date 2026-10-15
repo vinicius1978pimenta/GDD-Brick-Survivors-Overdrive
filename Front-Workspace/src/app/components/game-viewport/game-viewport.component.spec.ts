@@ -492,5 +492,90 @@ describe('GameViewportComponent', () => {
     expect(component.world.heroTransform.rotationY).toBeCloseTo(Math.PI * 0.5, 1);
     expect(component.world.heroTransform.x).toBeGreaterThan(0);
   });
+
+  it('deve permitir mirar e disparar para o céu com elevação positiva (direction.y > 0) e inclinar o braço do herói', () => {
+    fixture.detectChanges();
+    const shootSpy = vi.spyOn(component.world, 'shootCurrentWeapon');
+
+    component.world.heroTransform.x = 0;
+    component.world.heroTransform.y = 0;
+    component.world.heroTransform.z = 0;
+    component.world.vehicleComponent.driverEntityId = null; // A pé
+
+    // Simula mira 3D apontando alto para o céu (+Y e à frente +Z)
+    component['aimTarget3D'].set(0, 25, 10);
+    component.handleShoot();
+
+    expect(shootSpy).toHaveBeenCalled();
+    const [calledOrigin, calledDirection] = shootSpy.mock.calls[0];
+    expect(calledDirection?.y).toBeGreaterThan(0.7); // Subindo fortemente em direção ao céu aberto
+    expect(component['heroRightArmPivot']).toBeDefined();
+  });
+
+  it('deve posicionar a câmera nas costas do veículo imediatamente ao entrar no carro', () => {
+    fixture.detectChanges();
+    component['wasDriving'] = false;
+    component.world.vehicleTransform.rotationY = 1.2; // Carro apontando em 1.2 rad
+    component.world.vehicleComponent.driverEntityId = component.world.heroId; // Entra no carro
+
+    component['updateGameLogic'](0.016, 0.1);
+
+    const expectedBehindTheta = component.world.vehicleTransform.rotationY + Math.PI;
+    expect(component['targetTheta']).toBeCloseTo(expectedBehindTheta, 2);
+    expect(component['currentTheta']).toBeCloseTo(expectedBehindTheta, 2);
+    expect(component['targetRadius']).toBe(11.5);
+    expect(component['wasDriving']).toBe(true);
+  });
+
+  it('deve acompanhar a rotação da lataria do veículo durante curvas mantendo o foco nas costas', () => {
+    fixture.detectChanges();
+    // Inicia dentro do veículo
+    component['wasDriving'] = true;
+    component.world.vehicleComponent.driverEntityId = component.world.heroId;
+    component.world.vehicleTransform.rotationY = 0;
+    component['lastVehicleRotationY'] = 0;
+    component['targetTheta'] = Math.PI;
+    component['currentTheta'] = Math.PI;
+
+    // Carro vira 45 graus para a direita (+0.785 rad)
+    component.world.vehicleTransform.rotationY = Math.PI / 4;
+    component['updateGameLogic'](0.016, 0.2);
+
+    expect(component['targetTheta']).toBeCloseTo(Math.PI + Math.PI / 4, 2);
+    expect(component['lastVehicleRotationY']).toBeCloseTo(Math.PI / 4, 2);
+  });
+
+  it('deve permitir girar a câmera livremente com o mouse ao pilotar o veículo', () => {
+    fixture.detectChanges();
+    component['wasDriving'] = true;
+    component.world.vehicleComponent.driverEntityId = component.world.heroId;
+
+    const initialTheta = component['targetTheta'];
+    const initialPhi = component['targetPhi'];
+
+    // Simula evento do mouse girando para a esquerda e para cima
+    component['previousPointerX'] = 200;
+    component['previousPointerY'] = 200;
+
+    const moveEvent = typeof PointerEvent !== 'undefined'
+      ? new PointerEvent('pointermove', { clientX: 250, clientY: 170 })
+      : (new MouseEvent('pointermove', { clientX: 250, clientY: 170 }) as unknown as PointerEvent);
+
+    window.dispatchEvent(moveEvent);
+
+    expect(component['targetTheta']).not.toBe(initialTheta);
+    expect(component['targetPhi']).not.toBe(initialPhi);
+  });
+
+  it('deve manter a câmera calibrada nas costas do personagem com raio 8.0 e elevação 1.45 na visão a pé', () => {
+    fixture.detectChanges();
+    component['wasDriving'] = false;
+    component.world.vehicleComponent.driverEntityId = null; // A pé
+
+    component['updateGameLogic'](0.016, 0.1);
+
+    expect(component['targetRadius']).toBe(8.0);
+    expect(component['lookAtY']).toBeCloseTo(1.45, 1);
+  });
 });
 

@@ -54,7 +54,7 @@ export function updateMovementSystem(
   const fx = Math.sin(angle);
   const fz = Math.cos(angle);
   const rx = -Math.cos(angle);
-  const rz = Math.sin(angle); // Vetor lateral perpendicular para a direita (+D)
+  const rz = Math.sin(angle); // Vetor lateral perpendicular para a direita da tela (+D)
 
   // 2. Captura dos eixos de input
   const forwardAxis = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);

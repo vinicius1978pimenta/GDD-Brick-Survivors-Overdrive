@@ -172,12 +172,13 @@ export class CombatService {
       const baseAngle = Math.atan2(normDir.x, normDir.z);
       const angleStep = count > 1 ? totalSpread / (count - 1) : 0;
       const startAngle = baseAngle - totalSpread / 2;
+      const lenXZ = Math.hypot(normDir.x, normDir.z) || 0.001;
 
       for (let i = 0; i < count; i++) {
         this.projectileSeq++;
         const angle = startAngle + i * angleStep;
-        const vx = Math.sin(angle) * config.projectileSpeed;
-        const vz = Math.cos(angle) * config.projectileSpeed;
+        const vx = Math.sin(angle) * lenXZ * config.projectileSpeed;
+        const vz = Math.cos(angle) * lenXZ * config.projectileSpeed;
         const vy = normDir.y * config.projectileSpeed;
 
         const projectile: ActiveProjectile = {
@@ -241,7 +242,8 @@ export class CombatService {
       proj.x > ARENA_BOUNDS.maxX ||
       proj.z < ARENA_BOUNDS.minZ ||
       proj.z > ARENA_BOUNDS.maxZ ||
-      proj.y < 0
+      proj.y < 0 ||
+      proj.y > 100
     ) {
       return true;
     }

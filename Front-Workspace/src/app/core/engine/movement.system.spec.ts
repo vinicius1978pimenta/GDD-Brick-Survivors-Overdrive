@@ -57,19 +57,21 @@ describe('MovementSystem', () => {
     expect(transform.z).toBeLessThan(0); // Recuou para trás (-Z)
   });
 
-  it('deve realizar strafe lateral para a direita (+X) com D e para a esquerda (-X) com A quando virado para frente', () => {
-    // Strafe para a direita (D) com mouse/mira para frente (rotationY = 0)
+  it('deve realizar strafe lateral para a direita da tela (-X) com D e para a esquerda da tela (+X) com A quando virado para frente', () => {
+    // Strafe para a direita da tela (D) com mouse/mira para frente da arena (rotationY = 0)
+    transform.rotationY = 0;
     input.right = true;
     updateMovementSystem(transform, velocity, controller, input, false, 0.1);
     expect(controller.isMoving).toBe(true);
     expect(controller.speed).toBeGreaterThan(0);
-    expect(velocity.vx).toBeGreaterThan(0);
-    expect(transform.x).toBeGreaterThan(0);
+    expect(velocity.vx).toBeLessThan(0);
+    expect(transform.x).toBeLessThan(0);
     expect(transform.z).toBe(0);
 
-    // Reseta estado para strafe para a esquerda (A)
+    // Reseta estado para strafe para a esquerda da tela (A)
     transform.x = 0;
     transform.z = 0;
+    transform.rotationY = 0;
     velocity.vx = 0;
     velocity.vz = 0;
     controller.speed = 0;
@@ -79,19 +81,20 @@ describe('MovementSystem', () => {
     updateMovementSystem(transform, velocity, controller, input, false, 0.1);
     expect(controller.isMoving).toBe(true);
     expect(controller.speed).toBeGreaterThan(0);
-    expect(velocity.vx).toBeLessThan(0);
-    expect(transform.x).toBeLessThan(0);
+    expect(velocity.vx).toBeGreaterThan(0);
+    expect(transform.x).toBeGreaterThan(0);
     expect(transform.z).toBe(0);
   });
 
   it('deve normalizar o vetor de movimentação na diagonal (forward + right) sem exceder a velocidade máxima', () => {
+    transform.rotationY = 0;
     input.forward = true;
     input.right = true;
 
     updateMovementSystem(transform, velocity, controller, input, false, 0.1);
 
     expect(controller.isMoving).toBe(true);
-    expect(transform.x).toBeGreaterThan(0);
+    expect(transform.x).toBeLessThan(0);
     expect(transform.z).toBeGreaterThan(0);
 
     // A magnitude da velocidade calculada no plano XZ deve ser exatamente controller.speed

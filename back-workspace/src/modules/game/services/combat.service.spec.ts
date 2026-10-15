@@ -262,4 +262,71 @@ describe('CombatService', () => {
       expect(activeProjectiles.length).toBe(0); // Mine exploded
     });
   });
+
+  describe('3D Vertical Trajectories and Height Boundaries', () => {
+    it('should fire upward into the sky with positive vy, increasing proj.y on each tick', () => {
+      const result = combatService.handleShoot('player-1', {
+        weaponType: 'stud_blaster',
+        origin: { x: 0, y: 1.0, z: 0 },
+        direction: { x: 0, y: 1.0, z: 0 },
+        clientTimestamp: Date.now(),
+      });
+
+      expect(result.success).toBe(true);
+      const active = combatService.getActiveProjectiles();
+      expect(active.length).toBe(1);
+      expect(active[0].vy).toBeGreaterThan(30);
+
+      const initialY = active[0].y;
+      const { activeProjectiles } = combatService.update(0.05, players, vehicles);
+      expect(activeProjectiles.length).toBe(1);
+      expect(activeProjectiles[0].y).toBeGreaterThan(initialY);
+    });
+
+    it('should remove projectile when it exceeds maximum sky ceiling (y > 100)', () => {
+      combatService.handleShoot('player-1', {
+        weaponType: 'stud_blaster',
+        origin: { x: 0, y: 99.0, z: 0 },
+        direction: { x: 0, y: 1.0, z: 0 },
+        clientTimestamp: Date.now(),
+      });
+
+      // At vy ~36, dt = 0.05 moves y by ~1.8m -> y becomes ~100.8 > 100
+      const { activeProjectiles } = combatService.update(0.05, players, vehicles);
+      expect(activeProjectiles.length).toBe(0);
+    });
+
+    it('should remove projectile immediately when fired downward into the ground (y < 0)', () => {
+      combatService.handleShoot('player-1', {
+        weaponType: 'stud_blaster',
+        origin: { x: 0, y: 0.5, z: 0 },
+        direction: { x: 0, y: -1.0, z: 0 },
+        clientTimestamp: Date.now(),
+      });
+
+      // vy is -36m/s, dt = 0.05 -> drops to y = 0.5 - 1.8 = -1.3 < 0
+      const { activeProjectiles } = combatService.update(0.05, players, vehicles);
+      expect(activeProjectiles.length).toBe(0);
+    });
+
+    it('should preserve correct projectileSpeed magnitude in 3D scatter_shot when aimed upward', () => {
+      const result = combatService.handleShoot('player-1', {
+        weaponType: 'scatter_shot',
+        origin: { x: 0, y: 1.0, z: 0 },
+        direction: { x: 0.2, y: 0.8, z: 0.2 },
+        clientTimestamp: Date.now(),
+      });
+
+      expect(result.success).toBe(true);
+      const projectiles = combatService.getActiveProjectiles();
+      expect(projectiles.length).toBe(5);
+
+      for (const proj of projectiles) {
+        const totalSpeed = Math.hypot(proj.vx, proj.vy, proj.vz);
+        // scatter_shot speed is 24 m/s (WEAPON_CATALOG.scatter_shot.projectileSpeed)
+        expect(totalSpeed).toBeCloseTo(24, 1);
+        expect(proj.vy).toBeGreaterThan(0);
+      }
+    });
+  });
 });

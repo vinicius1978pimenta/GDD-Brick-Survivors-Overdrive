@@ -63,11 +63,15 @@ export function spawnProjectiles(
     return 0;
   }
 
-  // Normalização do vetor de direção no plano horizontal (XZ)
-  const lenXZ = Math.hypot(direction.x, direction.z) || 1;
-  const dirX = direction.x / lenXZ;
-  const dirZ = direction.z / lenXZ;
-  const baseAngle = Math.atan2(dirX, dirZ);
+  // Normalização do vetor de direção 3D completo
+  const len3D = Math.hypot(direction.x, direction.y, direction.z) || 1;
+  const normX = direction.x / len3D;
+  const normY = direction.y / len3D;
+  const normZ = direction.z / len3D;
+
+  const lenXZ = Math.hypot(normX, normZ) || 0.0001;
+  const baseAngle = Math.atan2(normX, normZ);
+  const dirY = normY;
 
   let spawned = 0;
 
@@ -93,7 +97,7 @@ export function spawnProjectiles(
       proj.vy = 0;
       proj.vz = 0;
     } else {
-      // Disparo balístico cinético
+      // Disparo balístico cinético 3D
       let angle = baseAngle;
       if (config.projectileCount > 1 && config.spreadAngle) {
         const spreadStep = config.spreadAngle / (config.projectileCount - 1);
@@ -101,12 +105,12 @@ export function spawnProjectiles(
         angle += offset;
       }
 
-      proj.x = origin.x + Math.sin(angle) * 0.8;
-      proj.y = Math.max(0.4, origin.y);
-      proj.z = origin.z + Math.cos(angle) * 0.8;
-      proj.vx = Math.sin(angle) * config.projectileSpeed;
-      proj.vy = 0;
-      proj.vz = Math.cos(angle) * config.projectileSpeed;
+      proj.x = origin.x + Math.sin(angle) * lenXZ * 0.8;
+      proj.y = Math.max(0.4, origin.y + dirY * 0.8);
+      proj.z = origin.z + Math.cos(angle) * lenXZ * 0.8;
+      proj.vx = Math.sin(angle) * lenXZ * config.projectileSpeed;
+      proj.vy = dirY * config.projectileSpeed;
+      proj.vz = Math.cos(angle) * lenXZ * config.projectileSpeed;
     }
 
     activeList.push(proj);
@@ -143,14 +147,17 @@ export function updateCombatSystem(
 
     if (!p.isMine) {
       p.x += p.vx * dt;
+      p.y += p.vy * dt;
       p.z += p.vz * dt;
 
-      // Limites da arena
+      // Limites da arena e colisão com solo/teto
       if (
         p.x < bounds.minX - 2 ||
         p.x > bounds.maxX + 2 ||
         p.z < bounds.minZ - 2 ||
-        p.z > bounds.maxZ + 2
+        p.z > bounds.maxZ + 2 ||
+        p.y < 0 ||
+        p.y > 100
       ) {
         pool.release(p);
         activeProjectiles.splice(i, 1);
