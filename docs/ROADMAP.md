@@ -12,8 +12,8 @@ Este documento descreve o plano de desenvolvimento do **Brick Survivors: Overdri
 | **Fase 2** | Cena 3D Local no Front-End (Three.js & Viewport) | **Concluída** | Especialista Front-End / Engine |
 | **Fase 3** | Movimentação, Física Arcade e Controle de Veículos | **Concluída** | Especialista Front-End & Game Architecture |
 | **Fase 4** | Sistema Modular de Blocos e Destruição Estilo Lego | **Concluída** | Especialista Front-End & Game Architecture |
-| **Fase 5** | Netcode Autoritativo (NestJS Socket.IO, Predição & Reconciliação) | **Próxima (Pronta para Iniciar)** | Especialista Back-End & Netcode |
-| **Fase 6** | Sistema de Combate, Armas Fictícias e Object Pooling | Planejada | Especialista de Game Architecture |
+| **Fase 5** | Netcode Autoritativo (NestJS Socket.IO, Predição & Reconciliação) | **Concluída** | Especialista Back-End, Front-End & Netcode |
+| **Fase 6** | Sistema de Combate, Armas Fictícias e Object Pooling | **Próxima (Pronta para Iniciar)** | Especialista de Game Architecture |
 | **Fase 7** | Modos de Jogo (Sobrevivência Co-op & Combate PvP) | Planejada | Time Integrado |
 | **Fase 8** | HUD/UI, Áudio Espacial, Otimizações Finais e Deploy | Planejada | Time Integrado / QA |
 
@@ -61,12 +61,14 @@ Este documento descreve o plano de desenvolvimento do **Brick Survivors: Overdri
 - [x] Efeitos de detritos e peças soltas com física balística arcade e quiques no solo.
 - [x] 56 testes automatizados com Vitest cobrindo 100% dos cenários em 9 suítes.
 
-### Fase 5: Netcode Autoritativo (Socket.IO, Predição & Reconciliação)
-- [ ] Implementação do NestJS Gateway com Socket.IO para sincronização multiplayer.
-- [ ] Envio periódico de snapshots autoritativos pelo servidor (20-30Hz).
-- [ ] Client-side prediction para movimento do jogador local sem percepção de latência.
-- [ ] Server reconciliation: buffer de inputs pendentes e correção com replay quando houver divergência.
-- [ ] Interpolação de entidades remotas (`lerp`/`slerp`) com buffer de snapshots (~50-100ms).
+### Fase 5: Netcode Autoritativo (Socket.IO, Predição & Reconciliação) (CONCLUÍDA)
+- [x] Implementação do NestJS Gateway (`GameGateway`) com Socket.IO e CORS para sincronização multiplayer.
+- [x] Envio periódico de snapshots autoritativos pelo servidor a 20Hz (50ms) com `ackInputs`.
+- [x] Client-side prediction para movimentação do herói e buggy sem latência percebida a 60 FPS.
+- [x] Server reconciliation: buffer de inputs pendentes com correção determinística e replay ao detectar divergências > 0.25m.
+- [x] Interpolação de entidades remotas (`lerp` a 15.0/s) no Three.js para movimentação fluida de outros jogadores.
+- [x] Indicador de status de conexão no HUD (🟢 ONLINE / 🔴 OFFLINE) e medidor de RTT/ping em tempo real.
+- [x] 106 testes automatizados aprovados (27 no backend e 79 no frontend) e builds de produção limpos.
 
 ### Fase 6: Sistema de Combate, Armas Fictícias e Object Pooling
 - [ ] Arsenal fictício arcade (lançador de pinos, raio desintegrador de blocos, minas de mola).
