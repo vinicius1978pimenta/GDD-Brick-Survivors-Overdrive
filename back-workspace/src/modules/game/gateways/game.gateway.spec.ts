@@ -37,21 +37,21 @@ describe('GameGateway', () => {
     };
   }
 
-  function createMockServer(): Server {
-    const toMock = vi.fn().mockReturnValue({
+  function createMockServer(): { serverMock: Server; toSpy: ReturnType<typeof vi.fn> } {
+    const toSpy = vi.fn().mockReturnValue({
       emit: vi.fn(),
     });
 
     const serverMock = {
-      to: toMock,
+      to: toSpy,
     } as unknown as Server;
 
-    return serverMock;
+    return { serverMock, toSpy };
   }
 
   describe('Lifecycle and Initialization', () => {
     it('should initialize gateway and attach server to gameRoomService', () => {
-      const serverMock = createMockServer();
+      const { serverMock } = createMockServer();
       const setServerSpy = vi.spyOn(gameRoomService, 'setServer');
 
       gateway.afterInit(serverMock);
@@ -177,6 +177,52 @@ describe('GameGateway', () => {
       expect(typeof response.clientTimestamp).toBe('number');
       expect(typeof response.serverTimestamp).toBe('number');
       expect(emitMock).toHaveBeenCalledWith('pong', response);
+    });
+  });
+
+  describe('Match Mode and Ready Handlers', () => {
+    it('should handle changeMode and broadcast matchSnapshot', () => {
+      const { serverMock, toSpy } = createMockServer();
+      gateway.afterInit(serverMock);
+
+      const { socket } = createMockSocketContext('client-1');
+      const response = gateway.handleChangeMode(socket, { mode: 'pvp_deathmatch' });
+
+      expect(response.success).toBe(true);
+      expect(response.mode).toBe('pvp_deathmatch');
+      expect(toSpy).toHaveBeenCalledWith('game-room');
+    });
+
+    it('should handle readyMatch and broadcast matchSnapshot', () => {
+      const { serverMock, toSpy } = createMockServer();
+      gateway.afterInit(serverMock);
+
+      const { socket } = createMockSocketContext('client-1');
+      gameRoomService.addPlayer('client-1', 'Player1');
+
+      const response = gateway.handleReadyMatch(socket, { ready: true });
+
+      expect(response.success).toBe(true);
+      expect(toSpy).toHaveBeenCalledWith('game-room');
+    });
+
+    it('should handle selectUpgrade when player is connected', () => {
+      const { serverMock } = createMockServer();
+      gateway.afterInit(serverMock);
+
+      const { socket } = createMockSocketContext('client-1');
+      gameRoomService.addPlayer('client-1', 'Player1');
+
+      const response = gateway.handleSelectUpgrade(socket, { upgradeId: 'upg-speed-1' });
+
+      expect(response).toHaveProperty('success');
+    });
+
+    it('should reject selectUpgrade for unknown player', () => {
+      const { socket } = createMockSocketContext('unknown-client');
+      const response = gateway.handleSelectUpgrade(socket, { upgradeId: 'upg-speed-1' });
+
+      expect(response.success).toBe(false);
     });
   });
 });

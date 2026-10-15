@@ -38,6 +38,14 @@ import {
 import { createProjectilePool, spawnProjectiles, updateCombatSystem } from './combat.system';
 import { SpatialHashGrid } from './spatial-hash-grid';
 import { PendingInput, WorldStateSnapshot } from '../network/network.types';
+import {
+  advanceToNextWave,
+  applyDamageToEnemyEntity,
+  createDefaultMatchState,
+  startMatchCountdown,
+  updateMatchSimulation,
+} from './match.system';
+import { GameModeType, MatchStateSnapshot, UpgradeOption } from './types/match.types';
 
 /**
  * GameWorld coordena a simulação ECS isomórfica e pura de Brick Survivors: Overdrive.
@@ -131,6 +139,12 @@ export class GameWorld {
   public readonly activeProjectiles: ProjectileEntity[] = [];
   public readonly spatialGrid: SpatialHashGrid = new SpatialHashGrid(8.0);
   public readonly recentDamageEvents: LocalDamageEvent[] = [];
+
+  // Estado de Partida e Modos de Jogo (Fase 7)
+  public matchState: MatchStateSnapshot = createDefaultMatchState('coop_survival');
+  public damageMultiplier = 1.0;
+  public cooldownMultiplier = 1.0;
+  private nextEnemyDebrisId = 20000;
 
   // Estado de Entrada (Inputs)
   public readonly inputState: InputState = {
@@ -247,6 +261,24 @@ export class GameWorld {
       this.spatialGrid.remove('hero_local');
     }
 
+    // Atualiza inimigos ativos no SpatialHashGrid
+    for (const enemy of this.matchState.enemies) {
+      if (enemy.active) {
+        const radius =
+          enemy.type === 'brute_rammer' ? 1.2 : enemy.type === 'swarm_buggy' ? 0.9 : 0.6;
+        this.spatialGrid.update(enemy.id, { x: enemy.x, y: enemy.y, z: enemy.z }, radius);
+      } else {
+        this.spatialGrid.remove(enemy.id);
+      }
+    }
+
+    // 6.5. Atualização da Simulação de Partida / Inimigos (Fase 7)
+    const playerPos: Vector3D = isDriving
+      ? { x: this.vehicleTransform.x, y: this.vehicleTransform.y, z: this.vehicleTransform.z }
+      : { x: this.heroTransform.x, y: this.heroTransform.y, z: this.heroTransform.z };
+
+    updateMatchSimulation(this.matchState, playerPos, dt, this.bounds);
+
     // 7. Simulação Balística e Testes de Impacto de Projéteis
     updateCombatSystem(
       this.activeProjectiles,
@@ -262,6 +294,27 @@ export class GameWorld {
         this.recentDamageEvents.push(dmg);
         if (this.recentDamageEvents.length > 50) {
           this.recentDamageEvents.shift();
+        }
+
+        // Se o dano atingiu um inimigo de blocos
+        if (dmg.targetId.startsWith('enemy_')) {
+          const res = applyDamageToEnemyEntity(
+            this.matchState.enemies,
+            dmg.targetId,
+            dmg.amount,
+            this.matchState.scores,
+            'local_player',
+          );
+          if (res.killed && res.enemy) {
+            const colorHex =
+              res.enemy.type === 'scout_block'
+                ? 0xef4444
+                : res.enemy.type === 'brute_rammer'
+                  ? 0x1e293b
+                  : 0xa855f7;
+            this.spawnEnemyDebris(res.enemy.x, res.enemy.y, res.enemy.z, colorHex, 6);
+            this.spatialGrid.remove(res.enemy.id);
+          }
         }
       },
     );
@@ -527,8 +580,9 @@ export class GameWorld {
    */
   public getWeaponCooldownRatio(weapon: WeaponType = this.currentWeapon): number {
     const config = WEAPON_CATALOG[weapon];
-    if (!config || config.cooldownMs <= 0) return 0;
-    return Math.min(1, Math.max(0, (this.weaponCooldowns[weapon] ?? 0) / config.cooldownMs));
+    const totalCooldown = (config?.cooldownMs ?? 1) * this.cooldownMultiplier;
+    if (!config || totalCooldown <= 0) return 0;
+    return Math.min(1, Math.max(0, (this.weaponCooldowns[weapon] ?? 0) / totalCooldown));
   }
 
   /**
@@ -588,8 +642,8 @@ export class GameWorld {
     const origin = customOrigin ?? defaultOrigin;
     const direction = customDirection ?? defaultDir;
 
-    // Aplica o cooldown
-    this.weaponCooldowns[weaponType] = config.cooldownMs;
+    // Aplica o cooldown com multiplicador de upgrade
+    this.weaponCooldowns[weaponType] = Math.round(config.cooldownMs * this.cooldownMultiplier);
 
     // Ejeta os projéteis no pool local (predição imediata)
     const spawned = spawnProjectiles(
@@ -600,6 +654,14 @@ export class GameWorld {
       this.projectilePool,
       this.activeProjectiles,
     );
+
+    if (this.damageMultiplier !== 1.0) {
+      for (let i = this.activeProjectiles.length - spawned; i < this.activeProjectiles.length; i++) {
+        this.activeProjectiles[i].damage = Math.round(
+          this.activeProjectiles[i].damage * this.damageMultiplier,
+        );
+      }
+    }
 
     return {
       success: true,
@@ -617,5 +679,91 @@ export class GameWorld {
     const events = [...this.recentDamageEvents];
     this.recentDamageEvents.length = 0;
     return events;
+  }
+
+  /**
+   * Define o modo de jogo (Sobrevivência Co-op ou PvP Deathmatch).
+   */
+  public setGameMode(mode: GameModeType): void {
+    this.matchState.mode = mode;
+    this.matchState.state = 'waiting';
+  }
+
+  /**
+   * Inicia a contagem regressiva da partida.
+   */
+  public startMatch(): void {
+    startMatchCountdown(this.matchState);
+  }
+
+  /**
+   * Seleciona um upgrade durante a wave intermission e avança de onda.
+   */
+  public selectUpgrade(upgradeId: string): void {
+    const option = this.matchState.upgradeOptions?.find((u) => u.id === upgradeId);
+    if (option) {
+      this.applyUpgrade(option);
+    }
+    advanceToNextWave(this.matchState, this.bounds);
+  }
+
+  /**
+   * Reinicia a partida para o estado inicial de espera.
+   */
+  public resetMatch(): void {
+    const currentMode = this.matchState.mode;
+    this.matchState = createDefaultMatchState(currentMode);
+  }
+
+  /**
+   * Aplica bônus de atributos e armas de um upgrade roguelite.
+   */
+  public applyUpgrade(option: UpgradeOption): void {
+    switch (option.stat) {
+      case 'damage':
+        this.damageMultiplier *= option.multiplier;
+        break;
+      case 'move_speed':
+        this.heroController.maxSpeed *= option.multiplier;
+        this.vehicleComponent.maxSpeed *= option.multiplier;
+        break;
+      case 'fire_rate':
+        this.cooldownMultiplier /= option.multiplier;
+        break;
+    }
+  }
+
+  /**
+   * Gera peças físicas de detritos LEGO ao destruir um inimigo.
+   */
+  public spawnEnemyDebris(
+    x: number,
+    y: number,
+    z: number,
+    colorHex: number,
+    count = 5,
+  ): void {
+    for (let i = 0; i < count; i++) {
+      const p = this.debrisPool.acquire();
+      p.id = ++this.nextEnemyDebrisId;
+      p.x = x + (Math.random() - 0.5) * 0.4;
+      p.y = y + 0.3 + Math.random() * 0.4;
+      p.z = z + (Math.random() - 0.5) * 0.4;
+      p.vx = (Math.random() - 0.5) * 8.0;
+      p.vy = 3.0 + Math.random() * 4.5;
+      p.vz = (Math.random() - 0.5) * 8.0;
+      p.rotX = Math.random() * Math.PI;
+      p.rotY = Math.random() * Math.PI;
+      p.rotZ = Math.random() * Math.PI;
+      p.vRotX = (Math.random() - 0.5) * 10;
+      p.vRotY = (Math.random() - 0.5) * 10;
+      p.size = { w: 0.35, h: 0.35, d: 0.35 };
+      p.colorHex = colorHex;
+      p.maxLife = 2.0;
+      p.life = 2.0;
+      p.active = true;
+      p.bounces = 0;
+      this.activeDebris.push(p);
+    }
   }
 }

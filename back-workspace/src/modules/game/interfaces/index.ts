@@ -38,3 +38,25 @@ export type {
   WeaponConfig,
   WeaponType,
 } from './combat.interface.js';
+
+export {
+  COOP_CONFIG,
+  ENEMY_CONFIGS,
+  PVP_CONFIG,
+  UPGRADE_CATALOG,
+} from './match.interface.js';
+
+export type {
+  EnemyConfig,
+  EnemyEntity,
+  EnemySnapshot,
+  EnemyType,
+  GameModeType,
+  MatchState,
+  MatchStateSnapshot,
+  PlayerMatchScore,
+  UpgradeOption,
+  UpgradeStat,
+  WaveConfig,
+} from './match.interface.js';
+

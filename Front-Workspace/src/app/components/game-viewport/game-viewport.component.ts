@@ -24,6 +24,16 @@ import {
 } from '../../core/engine';
 import { NetworkService, WorldStateSnapshot } from '../../core/network';
 import { FloatingCombatText, RemotePlayerVisual } from './interfaces/game-viewport.interface';
+import {
+  EnemyEntity,
+  EnemyType,
+  EnemyVisual,
+  GameModeType,
+  MatchState,
+  PlayerMatchScore,
+  UpgradeOption,
+} from './interfaces/match.interface';
+import { createEnemyMesh } from './enemy-mesh.factory';
 
 @Component({
   selector: 'app-game-viewport',
@@ -68,9 +78,22 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     typeof window !== 'undefined' ? window.innerHeight / 2 : 300,
   );
 
+  // Sinais de Modos de Jogo e Partida (Fase 7: Sobrevivência Co-op & PvP Deathmatch)
+  public readonly gameMode = signal<GameModeType>('coop_survival');
+  public readonly matchState = signal<MatchState>('waiting');
+  public readonly currentWave = signal(1);
+  public readonly maxWaves = signal(5);
+  public readonly enemiesRemaining = signal(0);
+  public readonly countdownSeconds = signal(3);
+  public readonly intermissionSeconds = signal(10);
+  public readonly upgradeOptions = signal<UpgradeOption[]>([]);
+  public readonly playerScores = signal<PlayerMatchScore[]>([]);
+  public readonly isPlayerReady = signal(false);
+
   // Instância do mundo de física e regras de jogo (100% desacoplado de Three.js)
   public readonly world = new GameWorld();
 
+  private readonly enemyVisuals = new Map<string, EnemyVisual>();
   private readonly raycaster = new THREE.Raycaster();
   private readonly mouseNDC = new THREE.Vector2();
   private readonly groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -1116,6 +1139,53 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
+   * Altera o modo de jogo selecionado (Sobrevivência Co-op ou PvP Deathmatch).
+   */
+  public selectGameMode(mode: GameModeType): void {
+    this.gameMode.set(mode);
+    this.world.setGameMode(mode);
+    this.networkService.setGameMode(mode);
+  }
+
+  /**
+   * Alterna o estado de "Pronto" do jogador e inicia a partida.
+   */
+  public toggleReady(): void {
+    const nextReady = !this.isPlayerReady();
+    this.isPlayerReady.set(nextReady);
+    this.networkService.setPlayerReady(nextReady);
+    if (nextReady) {
+      this.world.startMatch();
+      this.matchState.set(this.world.matchState.state);
+      this.currentWave.set(this.world.matchState.currentWave);
+    }
+  }
+
+  /**
+   * Seleciona um upgrade roguelite durante a wave_intermission e avança para a próxima onda.
+   */
+  public chooseUpgrade(upgradeId: string): void {
+    this.world.selectUpgrade(upgradeId);
+    this.networkService.selectUpgrade(upgradeId);
+    this.matchState.set(this.world.matchState.state);
+    this.currentWave.set(this.world.matchState.currentWave);
+    this.upgradeOptions.set([]);
+  }
+
+  /**
+   * Reinicia a partida para jogar novamente após vitória ou derrota.
+   */
+  public restartMatch(): void {
+    this.world.resetMatch();
+    this.matchState.set('waiting');
+    this.isPlayerReady.set(false);
+    this.networkService.setPlayerReady(false);
+    this.currentWave.set(1);
+    this.enemiesRemaining.set(0);
+    this.upgradeOptions.set([]);
+  }
+
+  /**
    * Dispara a arma atual do jogador orientada pelo ponto 3D apontado pelo mouse na arena.
    */
   public handleShoot(): void {
@@ -1278,6 +1348,83 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
         this.scene.remove(mesh);
         this.disposeObject3D(mesh);
         this.projectileMeshes.delete(id);
+      }
+    }
+  }
+
+  /**
+   * Sincroniza malhas Three.js e animações procedurais dos inimigos LEGO ativos.
+   */
+  private syncEnemyVisuals(delta: number, time: number): void {
+    if (!this.scene) return;
+
+    const match = this.networkService.currentMatch() ?? this.world.matchState;
+    const activeEnemyIds = new Set<string>();
+    const lerpSpeed = Math.min(1, delta * 14.0);
+
+    for (const enemy of match.enemies) {
+      if (!enemy.active || enemy.health <= 0) continue;
+
+      activeEnemyIds.add(enemy.id);
+      let visual = this.enemyVisuals.get(enemy.id);
+
+      if (!visual) {
+        const mesh = createEnemyMesh(enemy.type);
+        mesh.position.set(enemy.x, enemy.y, enemy.z);
+        mesh.rotation.y = enemy.rotationY;
+        this.scene.add(mesh);
+
+        visual = {
+          id: enemy.id,
+          type: enemy.type,
+          mesh,
+          currentX: enemy.x,
+          currentY: enemy.y,
+          currentZ: enemy.z,
+          currentRotationY: enemy.rotationY,
+          targetX: enemy.x,
+          targetY: enemy.y,
+          targetZ: enemy.z,
+          targetRotationY: enemy.rotationY,
+          health: enemy.health,
+          maxHealth: enemy.maxHealth,
+        };
+        this.enemyVisuals.set(enemy.id, visual);
+      }
+
+      visual.targetX = enemy.x;
+      visual.targetY = enemy.y;
+      visual.targetZ = enemy.z;
+      visual.targetRotationY = enemy.rotationY;
+      visual.health = enemy.health;
+
+      // Interpolação suave
+      visual.currentX += (visual.targetX - visual.currentX) * lerpSpeed;
+      visual.currentY += (visual.targetY - visual.currentY) * lerpSpeed;
+      visual.currentZ += (visual.targetZ - visual.currentZ) * lerpSpeed;
+
+      let rotDiff = (visual.targetRotationY - visual.currentRotationY) % (Math.PI * 2);
+      if (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+      if (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+      visual.currentRotationY += rotDiff * lerpSpeed;
+
+      // Animações procedurais específicas por arquétipo
+      let posY = visual.currentY;
+      if (visual.type === 'scout_block') {
+        const seed = parseInt(enemy.id.replace(/\D/g, '') || '0', 10);
+        posY += Math.sin(time * 6.0 + seed) * 0.08;
+      }
+
+      visual.mesh.position.set(visual.currentX, posY, visual.currentZ);
+      visual.mesh.rotation.y = visual.currentRotationY;
+    }
+
+    // Desaloca inimigos eliminados / inativos
+    for (const [id, visual] of this.enemyVisuals.entries()) {
+      if (!activeEnemyIds.has(id)) {
+        this.scene.remove(visual.mesh);
+        this.disposeObject3D(visual.mesh);
+        this.enemyVisuals.delete(id);
       }
     }
   }
@@ -2036,6 +2183,9 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     // 4. Sincronização visual de projéteis e arsenal LEGO
     this.syncProjectilesVisuals();
 
+    // 4.5. Sincronização visual de Inimigos de Blocos (Fase 7)
+    this.syncEnemyVisuals(delta, time);
+
     // 5. Coleta de eventos de dano locais para Floating Combat Text
     const localDamageEvents = this.world.flushRecentDamageEvents();
     for (const dmg of localDamageEvents) {
@@ -2073,6 +2223,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       const currentDurability = this.world.getDurabilityPercentage();
       const currentWeapon = this.world.getEquippedWeapon();
       const currentCooldownProgress = Math.round(this.world.getWeaponCooldownRatio() * 100);
+      const match = this.networkService.currentMatch() ?? this.world.matchState;
 
       this.ngZone.run(() => {
         if (this.speedKmh() !== currentKmh) this.speedKmh.set(currentKmh);
@@ -2086,6 +2237,22 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
         if (this.weaponCooldownProgress() !== currentCooldownProgress) {
           this.weaponCooldownProgress.set(currentCooldownProgress);
         }
+
+        // Sinais de Partida e Inimigos da Fase 7
+        if (this.matchState() !== match.state) this.matchState.set(match.state);
+        if (this.gameMode() !== match.mode) this.gameMode.set(match.mode);
+        if (this.currentWave() !== match.currentWave) this.currentWave.set(match.currentWave);
+        if (this.enemiesRemaining() !== match.enemiesRemaining) {
+          this.enemiesRemaining.set(match.enemiesRemaining);
+        }
+        const cdSec = Math.ceil(match.countdownSeconds);
+        if (this.countdownSeconds() !== cdSec) this.countdownSeconds.set(cdSec);
+        const intSec = Math.ceil(match.intermissionSeconds);
+        if (this.intermissionSeconds() !== intSec) this.intermissionSeconds.set(intSec);
+        if (this.upgradeOptions() !== (match.upgradeOptions ?? [])) {
+          this.upgradeOptions.set(match.upgradeOptions ?? []);
+        }
+        if (this.playerScores() !== match.scores) this.playerScores.set(match.scores);
       });
     }
   }
@@ -2147,6 +2314,10 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
         mesh.material.dispose();
       }
     }
+    for (const visual of this.enemyVisuals.values()) {
+      this.disposeObject3D(visual.mesh);
+    }
+    this.enemyVisuals.clear();
     this.debrisMeshes.clear();
     this.modularBlockMeshes.clear();
   }

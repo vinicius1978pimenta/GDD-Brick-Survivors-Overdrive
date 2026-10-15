@@ -697,4 +697,507 @@ iconify-icon {
   transform: translateX(4px);
 }
 
+/* ==========================================================================
+   FASE 7: Modos de Jogo, Lobby, Ondas, Upgrades Roguelite & Fim de Jogo
+   ========================================================================== */
+
+/* 1. Lobby & Seletor de Modo de Jogo */
+.match-lobby-backdrop,
+.upgrade-modal-backdrop,
+.match-result-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: rgba(10, 15, 26, 0.75);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: fadeInModal 0.25s ease-out;
+}
+
+@keyframes fadeInModal {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.lobby-card,
+.upgrade-modal-card,
+.match-result-card {
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 640px;
+  width: 100%;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 30px rgba(250, 204, 21, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  color: #f8fafc;
+  text-align: center;
+}
+
+.lobby-header-icon {
+  font-size: 2.8rem;
+  color: #fcd116;
+  filter: drop-shadow(0 0 10px rgba(252, 209, 22, 0.6));
+}
+
+.lobby-header h2,
+.upgrade-header h2,
+.result-title {
+  margin: 0.25rem 0 0 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #f8fafc;
+}
+
+.lobby-subtitle,
+.result-subtitle {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.mode-selector-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.mode-card-btn {
+  background: rgba(30, 41, 59, 0.7);
+  border: 2px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 1.25rem 1rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  color: #f8fafc;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+  position: relative;
+}
+
+.mode-card-btn:hover {
+  background: rgba(51, 65, 85, 0.8);
+  border-color: rgba(250, 204, 21, 0.6);
+  transform: translateY(-2px);
+}
+
+.mode-card-btn.mode-selected {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: #fcd116;
+  box-shadow: 0 0 20px rgba(252, 209, 22, 0.3);
+}
+
+.mode-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+}
+
+.mode-icon-box.mode-coop {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.4);
+}
+
+.mode-icon-box.mode-pvp {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+}
+
+.mode-title {
+  display: block;
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin-bottom: 0.2rem;
+}
+
+.mode-desc {
+  display: block;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+
+.btn-ready-start {
+  background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
+  color: #0f172a;
+  border: none;
+  border-radius: 10px;
+  padding: 0.9rem 1.8rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(234, 179, 8, 0.4);
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.btn-ready-start:hover {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(234, 179, 8, 0.6);
+}
+
+.btn-ready-start.btn-ready-active {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+/* 2. Overlay de Contagem Regressiva */
+.match-countdown-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.countdown-badge-box {
+  background: rgba(15, 23, 42, 0.85);
+  border: 2px solid rgba(250, 204, 21, 0.6);
+  border-radius: 20px;
+  padding: 1.5rem 3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 40px rgba(250, 204, 21, 0.4);
+  animation: pulseScale 1s infinite alternate;
+}
+
+@keyframes pulseScale {
+  from { transform: scale(0.95); }
+  to { transform: scale(1.05); }
+}
+
+.countdown-number {
+  font-size: 4.5rem;
+  font-weight: 900;
+  color: #fcd116;
+  text-shadow: 0 0 25px rgba(252, 209, 22, 0.8);
+  line-height: 1;
+}
+
+.countdown-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #e2e8f0;
+  margin-top: 0.5rem;
+}
+
+/* 3. Top Center: HUD de Ondas (Sobrevivência Co-op) */
+.wave-hud-top {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.wave-tag,
+.enemies-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.wave-tag {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  color: #60a5fa;
+}
+
+.enemies-tag {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #f87171;
+}
+
+.enemies-tag.enemies-alert {
+  border-color: #22c55e;
+  color: #4ade80;
+  animation: pulseGreen 1s infinite alternate;
+}
+
+@keyframes pulseGreen {
+  from { box-shadow: 0 0 6px rgba(34, 197, 94, 0.4); }
+  to { box-shadow: 0 0 16px rgba(34, 197, 94, 0.8); }
+}
+
+/* 4. Placar PvP em Tempo Real */
+.pvp-scoreboard-card {
+  position: absolute;
+  top: 4.5rem;
+  right: 1rem;
+  z-index: 10;
+  pointer-events: none;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  padding: 0.65rem 0.9rem;
+  min-width: 220px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+}
+
+.scoreboard-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #fcd116;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.3rem;
+}
+
+.scoreboard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.score-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+
+.score-row.local-scorer {
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.scorer-name {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scorer-stats {
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.scorer-pts {
+  font-weight: 700;
+  color: #fcd116;
+}
+
+/* 5. Modal de Upgrades Roguelite (Wave Intermission) */
+.upgrade-modal-card {
+  max-width: 820px;
+}
+
+.wave-complete-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  color: #4ade80;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.intermission-clock {
+  display: block;
+  font-size: 0.85rem;
+  color: #fcd116;
+  margin-top: 0.25rem;
+  font-weight: 600;
+}
+
+.upgrade-cards-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.upgrade-card-item {
+  background: rgba(30, 41, 59, 0.7);
+  border: 2px solid rgba(148, 163, 184, 0.25);
+  border-radius: 14px;
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  cursor: pointer;
+  color: #f8fafc;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+}
+
+.upgrade-card-item:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: #38bdf8;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(56, 189, 248, 0.35);
+}
+
+.upgrade-icon-wrap {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+}
+
+.upgrade-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #fcd116;
+}
+
+.upgrade-desc {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  line-height: 1.35;
+  flex: 1;
+}
+
+.upgrade-choose-btn {
+  background: rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  transition: all 0.2s ease;
+}
+
+.upgrade-card-item:hover .upgrade-choose-btn {
+  background: #38bdf8;
+  color: #0f172a;
+}
+
+/* 6. Tela de Fim de Jogo */
+.match-result-card.result-victory {
+  border-color: rgba(34, 197, 94, 0.6);
+  box-shadow: 0 0 35px rgba(34, 197, 94, 0.3);
+}
+
+.match-result-card.result-defeat {
+  border-color: rgba(239, 68, 68, 0.6);
+  box-shadow: 0 0 35px rgba(239, 68, 68, 0.3);
+}
+
+.result-icon-banner {
+  font-size: 3.5rem;
+}
+
+.result-victory .result-icon-banner {
+  color: #22c55e;
+  filter: drop-shadow(0 0 12px rgba(34, 197, 94, 0.8));
+}
+
+.result-defeat .result-icon-banner {
+  color: #ef4444;
+  filter: drop-shadow(0 0 12px rgba(239, 68, 68, 0.8));
+}
+
+.result-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.result-stat-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cell-label {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.cell-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.btn-play-again {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.85rem 1.6rem;
+  font-size: 1rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 18px rgba(59, 130, 246, 0.4);
+}
+
+.btn-play-again:hover {
+  filter: brightness(1.15);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.6);
+}
+
 

@@ -10,3 +10,5 @@ export * from './modular-block.system';
 export * from './spatial-hash-grid';
 export * from './combat.system';
 export * from './game-world';
+export * from './match.catalog';
+export * from './match.system';

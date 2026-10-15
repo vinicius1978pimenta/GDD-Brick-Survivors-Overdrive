@@ -3,12 +3,14 @@ import { isPlatformBrowser } from '@angular/common';
 import { io, Socket } from 'socket.io-client';
 import {
   JoinGameResponse,
+  MatchSnapshotCallback,
   PlayerInputPayload,
   PlayerShootPayload,
   PongResponse,
   SnapshotCallback,
   WorldStateSnapshot,
 } from './types/network.types';
+import { GameModeType, MatchStateSnapshot } from '../engine/types/match.types';
 
 @Injectable({
   providedIn: 'root',
@@ -18,6 +20,7 @@ export class NetworkService {
   private heartbeatIntervalId: ReturnType<typeof setInterval> | null = null;
   private sequenceNumber = 0;
   private snapshotListeners: SnapshotCallback[] = [];
+  private matchListeners: MatchSnapshotCallback[] = [];
 
   // Sinais reativos públicos para o HUD e a simulação
   public readonly isConnected = signal(false);
@@ -25,6 +28,8 @@ export class NetworkService {
   public readonly serverTick = signal(0);
   public readonly localPlayerId = signal<string | null>(null);
   public readonly latestSnapshot = signal<WorldStateSnapshot | null>(null);
+  public readonly currentMatch = signal<MatchStateSnapshot | null>(null);
+  public readonly isPlayerReady = signal(false);
 
   constructor(@Inject(PLATFORM_ID) private readonly platformId: object) {}
 
@@ -139,6 +144,44 @@ export class NetworkService {
   }
 
   /**
+   * Define o modo de jogo (Sobrevivência Co-op ou PvP Deathmatch).
+   */
+  public setGameMode(mode: GameModeType): void {
+    if (this.socket && this.isConnected()) {
+      this.socket.emit('setGameMode', { mode });
+    }
+  }
+
+  /**
+   * Altera o status de "Pronto" do jogador para a partida.
+   */
+  public setPlayerReady(ready: boolean): void {
+    this.isPlayerReady.set(ready);
+    if (this.socket && this.isConnected()) {
+      this.socket.emit('playerReady', { ready });
+    }
+  }
+
+  /**
+   * Seleciona um upgrade durante a fase de intermissão entre ondas (wave intermission).
+   */
+  public selectUpgrade(upgradeId: string): void {
+    if (this.socket && this.isConnected()) {
+      this.socket.emit('selectUpgrade', { upgradeId });
+    }
+  }
+
+  /**
+   * Registra um callback para ser chamado imediatamente ao receber uma atualização da partida.
+   */
+  public onMatchSnapshot(callback: MatchSnapshotCallback): () => void {
+    this.matchListeners.push(callback);
+    return () => {
+      this.matchListeners = this.matchListeners.filter((cb) => cb !== callback);
+    };
+  }
+
+  /**
    * Registra um callback para ser chamado imediatamente ao receber um novo snapshot.
    */
   public onSnapshot(callback: SnapshotCallback): () => void {
@@ -200,6 +243,8 @@ export class NetworkService {
     this.socket.on('disconnect', () => {
       this.isConnected.set(false);
       this.localPlayerId.set(null);
+      this.currentMatch.set(null);
+      this.isPlayerReady.set(false);
     });
 
     this.socket.on('pong', (data: PongResponse) => {
@@ -215,8 +260,23 @@ export class NetworkService {
       this.serverTick.set(snapshot.tick);
       this.latestSnapshot.set(snapshot);
 
+      if (snapshot.match) {
+        this.currentMatch.set(snapshot.match);
+        for (const listener of this.matchListeners) {
+          listener(snapshot.match);
+        }
+      }
+
       for (const listener of this.snapshotListeners) {
         listener(snapshot);
+      }
+    });
+
+    this.socket.on('matchStateSnapshot', (match: MatchStateSnapshot) => {
+      if (!match) return;
+      this.currentMatch.set(match);
+      for (const listener of this.matchListeners) {
+        listener(match);
       }
     });
   }

@@ -1,5 +1,6 @@
 import type {
   DamageEventSnapshot,
+  MatchStateSnapshot,
   PlayerSnapshot,
   ProjectileSnapshot,
   VehicleSnapshot,
@@ -7,6 +8,7 @@ import type {
 
 export type {
   DamageEventSnapshot,
+  MatchStateSnapshot,
   PlayerSnapshot,
   ProjectileSnapshot,
   VehicleSnapshot,
@@ -20,4 +22,5 @@ export class WorldStateSnapshotDto {
   readonly ackInputs: Record<string, number>;
   readonly projectiles: ProjectileSnapshot[];
   readonly damageEvents: DamageEventSnapshot[];
+  readonly match?: MatchStateSnapshot;
 }

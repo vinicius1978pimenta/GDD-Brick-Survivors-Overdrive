@@ -23,6 +23,7 @@ import type {
   VehicleSnapshot,
 } from '../interfaces/index.js';
 import { CombatService } from './combat.service.js';
+import { MatchManagerService } from './match-manager.service.js';
 
 export type {
   ConnectedPlayer,
@@ -50,7 +51,10 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
   private readonly vehicles = new Map<string, RoomVehicle>();
   private readonly snapshotCallbacks: Array<(snapshot: WorldStateSnapshotDto) => void> = [];
 
-  constructor(private readonly combatService: CombatService = new CombatService()) {
+  constructor(
+    private readonly combatService: CombatService = new CombatService(),
+    private readonly matchManagerService: MatchManagerService = new MatchManagerService(),
+  ) {
     this.initDefaultVehicles();
   }
 
@@ -61,6 +65,7 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     this.stopGameLoop();
     this.combatService.clear();
+    this.matchManagerService.reset();
   }
 
   public setServer(server: Server): void {
@@ -69,6 +74,10 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
 
   public getCombatService(): CombatService {
     return this.combatService;
+  }
+
+  public getMatchManagerService(): MatchManagerService {
+    return this.matchManagerService;
   }
 
   public onSnapshot(callback: (snapshot: WorldStateSnapshotDto) => void): void {
@@ -144,6 +153,7 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
     };
 
     this.players.set(socketId, player);
+    this.matchManagerService.registerPlayer(player);
     this.logger.log(`Player added to room: ${player.name} (${socketId})`);
     return player;
   }
@@ -163,6 +173,7 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.combatService.resetPlayerCooldowns(socketId);
+    this.matchManagerService.unregisterPlayer(socketId);
     this.players.delete(socketId);
     this.logger.log(`Player removed from room: ${player.name} (${socketId})`);
   }
@@ -252,6 +263,13 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       dt,
       this.players,
       this.vehicles,
+    );
+
+    this.matchManagerService.update(
+      dt,
+      this.players,
+      this.vehicles,
+      this.combatService,
     );
 
     const snapshot = this.buildSnapshot(ackInputs, activeProjectiles, damageEvents);
@@ -726,6 +744,7 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       ackInputs,
       projectiles,
       damageEvents: damageSnapshots,
+      match: this.matchManagerService.getSnapshot(),
     };
   }
 

@@ -1,3 +1,5 @@
+import { GameModeType, MatchStateSnapshot } from '../../engine/types/match.types';
+
 /**
  * Tipos e contratos de rede para comunicação em tempo real com o servidor NestJS (Socket.IO).
  */
@@ -56,6 +58,7 @@ export interface WorldStateSnapshot {
   readonly ackInputs: Record<string, number>;
   readonly projectiles?: ProjectileSnapshot[];
   readonly damageEvents?: DamageEventSnapshot[];
+  readonly match?: MatchStateSnapshot;
 }
 
 export interface PlayerInputPayload {
@@ -110,3 +113,4 @@ export interface PongResponse {
 }
 
 export type SnapshotCallback = (snapshot: WorldStateSnapshot) => void;
+export type MatchSnapshotCallback = (match: MatchStateSnapshot) => void;
