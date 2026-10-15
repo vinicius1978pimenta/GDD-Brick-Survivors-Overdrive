@@ -328,4 +328,41 @@ describe('GameViewportComponent', () => {
       component.ngOnDestroy();
     }).not.toThrow();
   });
+
+  it('deve exibir o Card de Arma Equipada no DOM e atualizar ao trocar de arma', () => {
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    const weaponCard = compiled.querySelector('.hud-weapon-card');
+    expect(weaponCard).not.toBeNull();
+    expect(weaponCard?.textContent).toContain('Stud Blaster');
+
+    component.equipWeapon('scatter_shot');
+    fixture.detectChanges();
+    expect(weaponCard?.textContent).toContain('Block Scatter Shot');
+
+    component.equipWeapon('spring_mine');
+    fixture.detectChanges();
+    expect(weaponCard?.textContent).toContain('Spring Mine');
+  });
+
+  it('deve processar tecla KeyJ para disparar arma', () => {
+    fixture.detectChanges();
+    const shootSpy = vi.spyOn(component.world, 'shootCurrentWeapon');
+
+    const event = new KeyboardEvent('keydown', { code: 'KeyJ' });
+    window.dispatchEvent(event);
+
+    expect(shootSpy).toHaveBeenCalled();
+  });
+
+  it('deve adicionar e exibir números flutuantes de dano (Floating Combat Text) no DOM', () => {
+    component.addFloatingCombatText(0, 1, 0, 15, 'stud_blaster');
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const floatingNum = compiled.querySelector('.floating-combat-number');
+    expect(floatingNum).not.toBeNull();
+    expect(floatingNum?.textContent).toContain('-15');
+  });
 });

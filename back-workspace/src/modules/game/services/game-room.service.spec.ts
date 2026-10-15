@@ -383,6 +383,8 @@ describe('GameRoomService', () => {
       expect(snapshot).toHaveProperty('players');
       expect(snapshot).toHaveProperty('vehicles');
       expect(snapshot).toHaveProperty('ackInputs');
+      expect(snapshot).toHaveProperty('projectiles');
+      expect(snapshot).toHaveProperty('damageEvents');
 
       expect(snapshot.players.length).toBe(1);
       expect(snapshot.vehicles.length).toBe(1);
@@ -395,6 +397,8 @@ describe('GameRoomService', () => {
       expect(typeof p.speed).toBe('number');
       expect(typeof p.isDriving).toBe('boolean');
       expect(typeof p.isGrounded).toBe('boolean');
+      expect(typeof p.health).toBe('number');
+      expect(p.health).toBe(100);
 
       const v = snapshot.vehicles[0];
       expect(typeof v.x).toBe('number');
@@ -403,6 +407,38 @@ describe('GameRoomService', () => {
       expect(typeof v.rotationY).toBe('number');
       expect(typeof v.speed).toBe('number');
       expect(typeof v.durability).toBe('number');
+    });
+  });
+
+  describe('Combat Integration in Room Simulation', () => {
+    it('should accept player shoot and include active projectile in snapshot', () => {
+      service.addPlayer('socket-1', 'Gunslinger');
+
+      const shootResult = service.handlePlayerShoot('socket-1', {
+        weaponType: 'stud_blaster',
+        origin: { x: 0, y: 1.0, z: 2.5 },
+        direction: { x: 0, y: 0, z: 1 },
+        clientTimestamp: Date.now(),
+      });
+
+      expect(shootResult.success).toBe(true);
+      expect(shootResult.projectilesSpawned).toBe(1);
+
+      const snapshot = service.stepSimulation(0.05);
+      expect(snapshot.projectiles.length).toBe(1);
+      expect(snapshot.projectiles[0].weaponType).toBe('stud_blaster');
+    });
+
+    it('should reject shoot for non-existent player', () => {
+      const shootResult = service.handlePlayerShoot('unknown-socket', {
+        weaponType: 'stud_blaster',
+        origin: { x: 0, y: 0, z: 0 },
+        direction: { x: 0, y: 0, z: 1 },
+        clientTimestamp: Date.now(),
+      });
+
+      expect(shootResult.success).toBe(false);
+      expect(shootResult.reason).toBe('Player not connected');
     });
   });
 });

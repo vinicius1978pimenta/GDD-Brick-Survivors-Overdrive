@@ -185,4 +185,23 @@ describe('NetworkService (Socket.IO Real-time Netcode)', () => {
     expect(result?.playerId).toBe('socket-test-123');
     expect(service.serverTick()).toBe(50);
   });
+
+  it('deve emitir playerShoot com weaponType, origin e direction', () => {
+    socketCallbacks.get('connect')?.();
+
+    service.shoot(
+      'stud_blaster',
+      { x: 10, y: 1, z: 20 },
+      { x: 0, y: 0, z: 1 },
+    );
+
+    expect(mockSocket.emit).toHaveBeenCalledWith(
+      'playerShoot',
+      expect.objectContaining({
+        weaponType: 'stud_blaster',
+        origin: { x: 10, y: 1, z: 20 },
+        direction: { x: 0, y: 0, z: 1 },
+      }),
+    );
+  });
 });

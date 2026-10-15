@@ -4,6 +4,7 @@ import { io, Socket } from 'socket.io-client';
 import {
   JoinGameResponse,
   PlayerInputPayload,
+  PlayerShootPayload,
   PongResponse,
   SnapshotCallback,
   WorldStateSnapshot,
@@ -116,6 +117,25 @@ export class NetworkService {
     }
 
     return this.sequenceNumber;
+  }
+
+  /**
+   * Emite a ação de disparo de arma fictícia para o servidor via Socket.IO.
+   */
+  public shoot(
+    weaponType: 'stud_blaster' | 'scatter_shot' | 'spring_mine',
+    origin: { readonly x: number; readonly y: number; readonly z: number },
+    direction: { readonly x: number; readonly y: number; readonly z: number },
+  ): void {
+    if (this.socket && this.isConnected()) {
+      const payload: PlayerShootPayload = {
+        weaponType,
+        origin,
+        direction,
+        clientTimestamp: Date.now(),
+      };
+      this.socket.emit('playerShoot', payload);
+    }
   }
 
   /**

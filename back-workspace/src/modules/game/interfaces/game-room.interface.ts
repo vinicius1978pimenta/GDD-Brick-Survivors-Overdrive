@@ -14,6 +14,8 @@ export interface ConnectedPlayer {
   vehicleId: string | null;
   lastProcessedSeq: number;
   pendingInputs: PlayerInputDto[];
+  health: number;
+  maxHealth: number;
 }
 
 export interface RoomVehicle {
@@ -62,4 +64,5 @@ export const PLAYER_CONFIG = {
   turnSpeed: 3.8,
   jumpForce: 7.2,
   gravity: 18.0,
+  maxHealth: 100,
 } as const;

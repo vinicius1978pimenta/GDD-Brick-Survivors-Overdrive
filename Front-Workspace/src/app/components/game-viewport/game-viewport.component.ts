@@ -13,9 +13,9 @@ import {
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import * as THREE from 'three';
-import { GameWorld } from '../../core/engine';
+import { GameWorld, ProjectileEntity, WEAPON_CATALOG, WeaponType } from '../../core/engine';
 import { NetworkService, WorldStateSnapshot } from '../../core/network';
-import { RemotePlayerVisual } from './interfaces/game-viewport.interface';
+import { FloatingCombatText, RemotePlayerVisual } from './interfaces/game-viewport.interface';
 
 @Component({
   selector: 'app-game-viewport',
@@ -44,6 +44,12 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     () => this.isDriving() && this.speedKmh() === 0,
   );
 
+  // Sinais de combate e arsenal LEGO
+  public readonly equippedWeapon = signal<WeaponType>('stud_blaster');
+  public readonly equippedWeaponName = computed(() => WEAPON_CATALOG[this.equippedWeapon()].name);
+  public readonly weaponCooldownProgress = signal(0);
+  public readonly floatingTexts = signal<FloatingCombatText[]>([]);
+
   // Instância do mundo de física e regras de jogo (100% desacoplado de Three.js)
   public readonly world = new GameWorld();
 
@@ -55,6 +61,9 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   private wheelMeshes: THREE.Mesh[] = [];
   private modularBlockMeshes = new Map<string, THREE.Mesh>();
   private debrisMeshes = new Map<number, THREE.Mesh>();
+  private projectileMeshes = new Map<string, THREE.Object3D>();
+  private floatingCombatTexts: FloatingCombatText[] = [];
+  private nextFloatingId = 1;
   private studTexture: THREE.CanvasTexture | null = null;
 
   private animationFrameId: number | null = null;
@@ -641,6 +650,211 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
+   * Equipa uma arma do arsenal fictício.
+   */
+  public equipWeapon(type: WeaponType): void {
+    this.world.setEquippedWeapon(type);
+    this.equippedWeapon.set(type);
+  }
+
+  /**
+   * Dispara a arma atual do jogador com predição imediata no cliente e emissão de rede.
+   */
+  public handleShoot(): void {
+    const shootResult = this.world.shootCurrentWeapon();
+    if (shootResult.success) {
+      if (this.networkService.isConnected()) {
+        this.networkService.shoot(
+          shootResult.weaponType,
+          shootResult.origin,
+          shootResult.direction,
+        );
+      }
+    }
+  }
+
+  /**
+   * Cria o mesh 3D estilizado no tema LEGO para o projétil correspondente.
+   */
+  private createProjectileMesh(type: WeaponType): THREE.Object3D {
+    const group = new THREE.Group();
+
+    if (type === 'stud_blaster') {
+      const cylGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.35, 12);
+      const cylMat = new THREE.MeshStandardMaterial({
+        color: 0xfbbf24,
+        emissive: 0xf59e0b,
+        emissiveIntensity: 1.4,
+        roughness: 0.2,
+        metalness: 0.4,
+      });
+      const cyl = new THREE.Mesh(cylGeo, cylMat);
+      cyl.rotation.x = Math.PI / 2;
+      cyl.castShadow = true;
+      group.add(cyl);
+
+      // Stud frontal
+      const studGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.08, 8);
+      const stud = new THREE.Mesh(studGeo, cylMat);
+      stud.position.z = 0.2;
+      stud.rotation.x = Math.PI / 2;
+      group.add(stud);
+    } else if (type === 'scatter_shot') {
+      const boxGeo = new THREE.BoxGeometry(0.24, 0.24, 0.24);
+      const colors = [0x38bdf8, 0xef4444, 0x10b981, 0xf59e0b];
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+      const boxMat = new THREE.MeshStandardMaterial({
+        color: randomColor,
+        emissive: randomColor,
+        emissiveIntensity: 1.2,
+        roughness: 0.3,
+      });
+      const box = new THREE.Mesh(boxGeo, boxMat);
+      box.castShadow = true;
+      group.add(box);
+    } else if (type === 'spring_mine') {
+      // Base metálica de disco
+      const baseGeo = new THREE.CylinderGeometry(0.42, 0.46, 0.1, 16);
+      const baseMat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        roughness: 0.4,
+        metalness: 0.7,
+      });
+      const base = new THREE.Mesh(baseGeo, baseMat);
+      base.position.y = 0.05;
+      base.castShadow = true;
+      base.receiveShadow = true;
+      group.add(base);
+
+      // Mola / Stud luminoso pulsante
+      const lightGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.16, 12);
+      const lightMat = new THREE.MeshStandardMaterial({
+        color: 0xef4444,
+        emissive: 0xdc2626,
+        emissiveIntensity: 2.2,
+        roughness: 0.2,
+      });
+      const light = new THREE.Mesh(lightGeo, lightMat);
+      light.position.y = 0.16;
+      group.add(light);
+    }
+
+    return group;
+  }
+
+  /**
+   * Sincroniza malhas Three.js dos projéteis ativos na simulação.
+   */
+  private syncProjectilesVisuals(): void {
+    if (!this.scene) return;
+
+    const activeIds = new Set<string>();
+
+    for (const p of this.world.activeProjectiles) {
+      activeIds.add(p.id);
+      let mesh = this.projectileMeshes.get(p.id);
+
+      if (!mesh) {
+        mesh = this.createProjectileMesh(p.weaponType);
+        this.scene.add(mesh);
+        this.projectileMeshes.set(p.id, mesh);
+      }
+
+      mesh.position.set(p.x, p.y, p.z);
+      if (!p.isMine && (p.vx !== 0 || p.vz !== 0)) {
+        mesh.rotation.y = Math.atan2(p.vx, p.vz);
+      }
+    }
+
+    // Desaloca malhas de projéteis inativos/reciclados
+    for (const [id, mesh] of this.projectileMeshes.entries()) {
+      if (!activeIds.has(id)) {
+        this.scene.remove(mesh);
+        this.disposeObject3D(mesh);
+        this.projectileMeshes.delete(id);
+      }
+    }
+  }
+
+  /**
+   * Registra um novo Floating Combat Text ao causar ou receber dano.
+   */
+  public addFloatingCombatText(
+    x: number,
+    y: number,
+    z: number,
+    amount: number,
+    weaponType: WeaponType,
+  ): void {
+    let text = `-${Math.round(amount)}`;
+    let color = '#fbbf24';
+    let scale = 1.0;
+
+    if (weaponType === 'spring_mine' || amount >= 45) {
+      text = `💥 BOOM! -${Math.round(amount)}`;
+      color = '#ef4444';
+      scale = 1.35;
+    } else if (weaponType === 'scatter_shot') {
+      text = `-${Math.round(amount)}`;
+      color = '#38bdf8';
+      scale = 0.95;
+    }
+
+    this.floatingCombatTexts.push({
+      id: this.nextFloatingId++,
+      text,
+      x,
+      y: y + 0.4,
+      z,
+      color,
+      life: 0,
+      maxLife: 1.1,
+      scale,
+      screenX: 0,
+      screenY: 0,
+      opacity: 1,
+      visible: true,
+    });
+
+    if (this.floatingCombatTexts.length > 25) {
+      this.floatingCombatTexts.shift();
+    }
+
+    this.floatingTexts.set([...this.floatingCombatTexts]);
+  }
+
+  /**
+   * Atualiza a elevação, fade-out e projeção 3D->2D dos Floating Combat Texts.
+   */
+  private updateFloatingTexts(delta: number): void {
+    const container = this.containerRef?.nativeElement;
+    const width = container?.clientWidth || 800;
+    const height = container?.clientHeight || 600;
+
+    for (let i = this.floatingCombatTexts.length - 1; i >= 0; i--) {
+      const item = this.floatingCombatTexts[i];
+      item.life += delta;
+      if (item.life >= item.maxLife) {
+        this.floatingCombatTexts.splice(i, 1);
+        continue;
+      }
+
+      item.y += delta * 1.6;
+      item.opacity = Math.max(0, 1 - item.life / item.maxLife);
+
+      if (this.camera) {
+        const v = new THREE.Vector3(item.x, item.y, item.z);
+        v.project(this.camera);
+        item.screenX = Math.round((v.x * 0.5 + 0.5) * width);
+        item.screenY = Math.round((-(v.y * 0.5) + 0.5) * height);
+        item.visible = v.z < 1;
+      }
+    }
+
+    this.floatingTexts.set([...this.floatingCombatTexts]);
+  }
+
+  /**
    * Cria o modelo 3D do Veículo (Buggy Arcade de Blocos).
    * Chassi amarelo/preto, 4 rodas volumosas em cilindros pretos com calotas, santantônio e bancos.
    */
@@ -915,6 +1129,14 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       if (!event.repeat && !this.world.isDriving() && this.world.vehicleTransform && this.world.getDurabilityPercentage() > 5) {
         this.world.forceDetachNextBlock();
       }
+    } else if (code === 'KeyJ') {
+      this.handleShoot();
+    } else if (code === 'Digit1' || code === 'Numpad1') {
+      this.equipWeapon('stud_blaster');
+    } else if (code === 'Digit2' || code === 'Numpad2') {
+      this.equipWeapon('scatter_shot');
+    } else if (code === 'Digit3' || code === 'Numpad3') {
+      this.equipWeapon('spring_mine');
     }
   }
 
@@ -940,6 +1162,11 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.previousPointerX = event.clientX;
     this.previousPointerY = event.clientY;
     this.idleTime = 0;
+
+    // Disparo primário via botão esquerdo do mouse
+    if (event.button === 0) {
+      this.handleShoot();
+    }
   }
 
   private onPointerMove(event: PointerEvent): void {
@@ -1152,7 +1379,19 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       }
     }
 
-    // 4. Interpolação suave (lerp) das entidades remotas (Multiplayer Visual)
+    // 4. Sincronização visual de projéteis e arsenal LEGO
+    this.syncProjectilesVisuals();
+
+    // 5. Coleta de eventos de dano locais para Floating Combat Text
+    const localDamageEvents = this.world.flushRecentDamageEvents();
+    for (const dmg of localDamageEvents) {
+      this.addFloatingCombatText(dmg.x, dmg.y, dmg.z, dmg.amount, dmg.weaponType);
+    }
+
+    // 6. Atualização de animação e projeção dos números flutuantes de dano
+    this.updateFloatingTexts(delta);
+
+    // 7. Interpolação suave (lerp) das entidades remotas (Multiplayer Visual)
     const remoteLerpSpeed = Math.min(1, delta * 15.0);
     for (const visual of this.remotePlayerVisuals.values()) {
       visual.currentX += (visual.targetX - visual.currentX) * remoteLerpSpeed;
@@ -1168,7 +1407,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       visual.mesh.rotation.y = visual.currentRotationY;
     }
 
-    // 5. Atualização dos Sinais Reativos do HUD (a cada ~60ms para performance)
+    // 8. Atualização dos Sinais Reativos do HUD (a cada ~60ms para performance)
     this.hudUpdateTimer += delta;
     if (this.hudUpdateTimer >= 0.06) {
       this.hudUpdateTimer = 0;
@@ -1178,22 +1417,22 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       const currentInteract = this.world.canInteract();
       const currentDrift = this.world.isDrifting();
       const currentDurability = this.world.getDurabilityPercentage();
+      const currentWeapon = this.world.getEquippedWeapon();
+      const currentCooldownProgress = Math.round(this.world.getWeaponCooldownRatio() * 100);
 
-      if (
-        this.speedKmh() !== currentKmh ||
-        this.isDriving() !== currentDriving ||
-        this.canInteract() !== currentInteract ||
-        this.isDrifting() !== currentDrift ||
-        this.durabilityPercentage() !== currentDurability
-      ) {
-        this.ngZone.run(() => {
-          this.speedKmh.set(currentKmh);
-          this.isDriving.set(currentDriving);
-          this.canInteract.set(currentInteract);
-          this.isDrifting.set(currentDrift);
+      this.ngZone.run(() => {
+        if (this.speedKmh() !== currentKmh) this.speedKmh.set(currentKmh);
+        if (this.isDriving() !== currentDriving) this.isDriving.set(currentDriving);
+        if (this.canInteract() !== currentInteract) this.canInteract.set(currentInteract);
+        if (this.isDrifting() !== currentDrift) this.isDrifting.set(currentDrift);
+        if (this.durabilityPercentage() !== currentDurability) {
           this.durabilityPercentage.set(currentDurability);
-        });
-      }
+        }
+        if (this.equippedWeapon() !== currentWeapon) this.equippedWeapon.set(currentWeapon);
+        if (this.weaponCooldownProgress() !== currentCooldownProgress) {
+          this.weaponCooldownProgress.set(currentCooldownProgress);
+        }
+      });
     }
   }
 
@@ -1201,6 +1440,13 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
    * Limpeza exaustiva de geometrias, materiais, texturas e renderer Three.js.
    */
   private disposeThreeResources(): void {
+    for (const mesh of this.projectileMeshes.values()) {
+      this.disposeObject3D(mesh);
+    }
+    this.projectileMeshes.clear();
+    this.floatingCombatTexts.length = 0;
+    this.floatingTexts.set([]);
+
     if (this.studTexture) {
       this.studTexture.dispose();
       this.studTexture = null;

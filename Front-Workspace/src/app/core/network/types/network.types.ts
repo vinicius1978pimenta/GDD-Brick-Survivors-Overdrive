@@ -13,6 +13,8 @@ export interface PlayerSnapshot {
   readonly isDriving: boolean;
   readonly isGrounded: boolean;
   readonly vehicleId: string | null;
+  readonly health?: number;
+  readonly maxHealth?: number;
 }
 
 export interface VehicleSnapshot {
@@ -26,12 +28,34 @@ export interface VehicleSnapshot {
   readonly driverId: string | null;
 }
 
+export interface ProjectileSnapshot {
+  readonly id: string;
+  readonly weaponType: 'stud_blaster' | 'scatter_shot' | 'spring_mine';
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly vx: number;
+  readonly vy: number;
+  readonly vz: number;
+}
+
+export interface DamageEventSnapshot {
+  readonly targetId: string;
+  readonly amount: number;
+  readonly isVehicle: boolean;
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}
+
 export interface WorldStateSnapshot {
   readonly tick: number;
   readonly timestamp: number;
   readonly players: PlayerSnapshot[];
   readonly vehicles: VehicleSnapshot[];
   readonly ackInputs: Record<string, number>;
+  readonly projectiles?: ProjectileSnapshot[];
+  readonly damageEvents?: DamageEventSnapshot[];
 }
 
 export interface PlayerInputPayload {
@@ -45,6 +69,13 @@ export interface PlayerInputPayload {
   readonly interact: boolean;
   readonly dt: number;
   readonly timestamp: number;
+}
+
+export interface PlayerShootPayload {
+  readonly weaponType: 'stud_blaster' | 'scatter_shot' | 'spring_mine';
+  readonly origin: { readonly x: number; readonly y: number; readonly z: number };
+  readonly direction: { readonly x: number; readonly y: number; readonly z: number };
+  readonly clientTimestamp: number;
 }
 
 export interface PendingInput {

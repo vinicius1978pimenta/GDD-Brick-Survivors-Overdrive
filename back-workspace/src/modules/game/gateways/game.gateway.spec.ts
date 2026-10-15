@@ -126,6 +126,36 @@ describe('GameGateway', () => {
     });
   });
 
+  describe('playerShoot event', () => {
+    it('should delegate shoot action to gameRoomService and return result', () => {
+      gameRoomService.addPlayer('client-1', 'Sharpshooter');
+
+      const { socket } = createMockSocketContext('client-1');
+      const result = gateway.handlePlayerShoot(socket, {
+        weaponType: 'stud_blaster',
+        origin: { x: 0, y: 1.0, z: 0 },
+        direction: { x: 0, y: 0, z: 1 },
+        clientTimestamp: Date.now(),
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.projectilesSpawned).toBe(1);
+    });
+
+    it('should return error if unauthenticated/unconnected player shoots', () => {
+      const { socket } = createMockSocketContext('ghost-client');
+      const result = gateway.handlePlayerShoot(socket, {
+        weaponType: 'stud_blaster',
+        origin: { x: 0, y: 0, z: 0 },
+        direction: { x: 0, y: 0, z: 1 },
+        clientTimestamp: Date.now(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toBe('Player not connected');
+    });
+  });
+
   describe('ping and latency measurement', () => {
     it('should respond to ping with pong and timestamps for RTT calculation', () => {
       const { socket, emitMock } = createMockSocketContext('client-1');

@@ -9,11 +9,18 @@ import {
   VEHICLE_CONFIG,
 } from '../interfaces/index.js';
 import type {
+  ActiveProjectile,
   ConnectedPlayer,
+  DamageEvent,
+  DamageEventSnapshot,
+  PlayerShootPayload,
   PlayerSnapshot,
+  ProjectileSnapshot,
   RoomVehicle,
+  ShootResult,
   VehicleSnapshot,
 } from '../interfaces/index.js';
+import { CombatService } from './combat.service.js';
 
 export type {
   ConnectedPlayer,
@@ -28,7 +35,6 @@ export {
   VEHICLE_CONFIG,
 };
 
-
 @Injectable()
 export class GameRoomService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GameRoomService.name);
@@ -40,7 +46,7 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
   private readonly vehicles = new Map<string, RoomVehicle>();
   private readonly snapshotCallbacks: Array<(snapshot: WorldStateSnapshotDto) => void> = [];
 
-  constructor() {
+  constructor(private readonly combatService: CombatService = new CombatService()) {
     this.initDefaultVehicles();
   }
 
@@ -50,10 +56,15 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy(): void {
     this.stopGameLoop();
+    this.combatService.clear();
   }
 
   public setServer(server: Server): void {
     this.server = server;
+  }
+
+  public getCombatService(): CombatService {
+    return this.combatService;
   }
 
   public onSnapshot(callback: (snapshot: WorldStateSnapshotDto) => void): void {
@@ -124,6 +135,8 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       vehicleId: null,
       lastProcessedSeq: 0,
       pendingInputs: [],
+      health: PLAYER_CONFIG.maxHealth,
+      maxHealth: PLAYER_CONFIG.maxHealth,
     };
 
     this.players.set(socketId, player);
@@ -145,6 +158,7 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    this.combatService.resetPlayerCooldowns(socketId);
     this.players.delete(socketId);
     this.logger.log(`Player removed from room: ${player.name} (${socketId})`);
   }
@@ -159,6 +173,21 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       player.pendingInputs.shift();
     }
     player.pendingInputs.push(input);
+  }
+
+  public handlePlayerShoot(
+    playerId: string,
+    payload: PlayerShootPayload,
+  ): ShootResult {
+    const player = this.players.get(playerId);
+    if (!player) {
+      return {
+        success: false,
+        reason: 'Player not connected',
+        projectilesSpawned: 0,
+      };
+    }
+    return this.combatService.handleShoot(playerId, payload);
   }
 
   public startGameLoop(intervalMs = SIMULATION_CONFIG.intervalMs): void {
@@ -215,8 +244,14 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const snapshot = this.buildSnapshot(ackInputs);
-    this.broadcastSnapshot(snapshot);
+    const { damageEvents, activeProjectiles } = this.combatService.update(
+      dt,
+      this.players,
+      this.vehicles,
+    );
+
+    const snapshot = this.buildSnapshot(ackInputs, activeProjectiles, damageEvents);
+    this.broadcastSnapshot(snapshot, damageEvents);
     return snapshot;
   }
 
@@ -516,7 +551,11 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private buildSnapshot(ackInputs: Record<string, number>): WorldStateSnapshotDto {
+  private buildSnapshot(
+    ackInputs: Record<string, number>,
+    activeProjectiles: ActiveProjectile[] = [],
+    damageEvents: DamageEvent[] = [],
+  ): WorldStateSnapshotDto {
     const players: PlayerSnapshot[] = Array.from(this.players.values()).map((p) => ({
       id: p.id,
       name: p.name,
@@ -528,6 +567,8 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       isDriving: p.isDriving,
       isGrounded: p.isGrounded,
       vehicleId: p.vehicleId,
+      health: p.health,
+      maxHealth: p.maxHealth,
     }));
 
     const vehicles: VehicleSnapshot[] = Array.from(this.vehicles.values()).map((v) => ({
@@ -541,18 +582,46 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
       driverId: v.driverId,
     }));
 
+    const projectiles: ProjectileSnapshot[] = activeProjectiles.map((p) => ({
+      id: p.id,
+      weaponType: p.weaponType,
+      x: Number(p.x.toFixed(4)),
+      y: Number(p.y.toFixed(4)),
+      z: Number(p.z.toFixed(4)),
+      vx: Number(p.vx.toFixed(4)),
+      vy: Number(p.vy.toFixed(4)),
+      vz: Number(p.vz.toFixed(4)),
+    }));
+
+    const damageSnapshots: DamageEventSnapshot[] = damageEvents.map((d) => ({
+      targetId: d.targetId,
+      amount: d.amount,
+      isVehicle: d.isVehicle,
+      x: Number(d.x.toFixed(4)),
+      y: Number(d.y.toFixed(4)),
+      z: Number(d.z.toFixed(4)),
+    }));
+
     return {
       tick: this.currentTick,
       timestamp: Date.now(),
       players,
       vehicles,
       ackInputs,
+      projectiles,
+      damageEvents: damageSnapshots,
     };
   }
 
-  private broadcastSnapshot(snapshot: WorldStateSnapshotDto): void {
+  private broadcastSnapshot(
+    snapshot: WorldStateSnapshotDto,
+    damageEvents: DamageEvent[] = [],
+  ): void {
     if (this.server) {
       this.server.to('game-room').emit('worldStateSnapshot', snapshot);
+      if (damageEvents.length > 0) {
+        this.server.to('game-room').emit('combatEvent', damageEvents);
+      }
     }
 
     for (const callback of this.snapshotCallbacks) {

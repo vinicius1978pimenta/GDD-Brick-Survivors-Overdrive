@@ -12,14 +12,16 @@ import {
 import { Server, Socket } from 'socket.io';
 import { JoinGameDto } from '../dto/join-game.dto.js';
 import { PlayerInputDto } from '../dto/player-input.dto.js';
+import { PlayerShootDto } from '../dto/player-shoot.dto.js';
 import { GameRoomService } from '../services/game-room.service.js';
 import type {
   JoinGameResponse,
   PingPayload,
   PongResponse,
+  ShootResult,
 } from '../interfaces/index.js';
 
-export type { JoinGameResponse, PingPayload, PongResponse };
+export type { JoinGameResponse, PingPayload, PongResponse, ShootResult };
 
 @WebSocketGateway({
   cors: {
@@ -73,6 +75,14 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     @MessageBody() input: PlayerInputDto,
   ): void {
     this.gameRoomService.enqueueInput(client.id, input);
+  }
+
+  @SubscribeMessage('playerShoot')
+  handlePlayerShoot(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: PlayerShootDto,
+  ): ShootResult {
+    return this.gameRoomService.handlePlayerShoot(client.id, payload);
   }
 
   @SubscribeMessage('ping')

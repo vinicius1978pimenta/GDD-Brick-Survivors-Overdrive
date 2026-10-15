@@ -231,4 +231,35 @@ describe('GameWorld (ECS Coordinator)', () => {
     expect(world.getPendingInputsCount()).toBe(1);
     expect(world.pendingInputs[0].seq).toBe(2);
   });
+
+  it('deve equipar diferentes armas do arsenal LEGO', () => {
+    expect(world.getEquippedWeapon()).toBe('stud_blaster');
+
+    expect(world.setEquippedWeapon('scatter_shot')).toBe(true);
+    expect(world.getEquippedWeapon()).toBe('scatter_shot');
+
+    expect(world.setEquippedWeapon('spring_mine')).toBe(true);
+    expect(world.getEquippedWeapon()).toBe('spring_mine');
+
+    expect(world.setEquippedWeapon('invalid_gun' as any)).toBe(false);
+  });
+
+  it('deve disparar arma atual, aplicar cooldown e adicionar projéteis ativos', () => {
+    world.setEquippedWeapon('stud_blaster');
+    expect(world.canShootCurrentWeapon()).toBe(true);
+
+    const result = world.shootCurrentWeapon();
+    expect(result.success).toBe(true);
+    expect(result.projectilesSpawned).toBe(1);
+    expect(world.activeProjectiles.length).toBe(1);
+    expect(world.canShootCurrentWeapon()).toBe(false);
+
+    // Segundo disparo imediato deve ser bloqueado por cooldown
+    const secondShot = world.shootCurrentWeapon();
+    expect(secondShot.success).toBe(false);
+
+    // Avança tempo para zerar cooldown
+    world.fixedUpdate(0.2);
+    expect(world.canShootCurrentWeapon()).toBe(true);
+  });
 });

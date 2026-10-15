@@ -17,7 +17,7 @@ import {
 } from './types';
 import { updateVehicleSystem } from './vehicle.system';
 import { ObjectPool } from './object-pool';
-import { DebrisParticle, ModularVehicleComponent } from './modular-block.types';
+import { DebrisParticle, ModularVehicleComponent, Vector3D } from './modular-block.types';
 import {
   applyDamageToBlock,
   applyVehicleImpactDamage,
@@ -26,6 +26,14 @@ import {
   dismantleVehicle,
   updateDebrisSimulation,
 } from './modular-block.system';
+import {
+  LocalDamageEvent,
+  ProjectileEntity,
+  WEAPON_CATALOG,
+  WeaponType,
+} from './interfaces/combat.interface';
+import { createProjectilePool, spawnProjectiles, updateCombatSystem } from './combat.system';
+import { SpatialHashGrid } from './spatial-hash-grid';
 import { PendingInput, WorldStateSnapshot } from '../network/network.types';
 
 /**
@@ -109,6 +117,18 @@ export class GameWorld {
   );
   public readonly activeDebris: DebrisParticle[] = [];
 
+  // Arsenal Fictício e Sistema de Combate LEGO
+  private currentWeapon: WeaponType = 'stud_blaster';
+  public readonly weaponCooldowns: Record<WeaponType, number> = {
+    stud_blaster: 0,
+    scatter_shot: 0,
+    spring_mine: 0,
+  };
+  public readonly projectilePool: ObjectPool<ProjectileEntity> = createProjectilePool(64);
+  public readonly activeProjectiles: ProjectileEntity[] = [];
+  public readonly spatialGrid: SpatialHashGrid = new SpatialHashGrid(8.0);
+  public readonly recentDamageEvents: LocalDamageEvent[] = [];
+
   // Estado de Entrada (Inputs)
   public readonly inputState: InputState = {
     forward: false,
@@ -191,7 +211,50 @@ export class GameWorld {
     // 4. Atualização da Simulação de Detritos Físicos
     updateDebrisSimulation(this.activeDebris, this.debrisPool, dt, this.bounds);
 
-    // 5. Se ainda estiver dirigindo, acopla o herói ao assento do veículo
+    // 5. Atualização dos Cooldowns de Armas
+    for (const key of Object.keys(this.weaponCooldowns) as WeaponType[]) {
+      if (this.weaponCooldowns[key] > 0) {
+        this.weaponCooldowns[key] = Math.max(0, this.weaponCooldowns[key] - dt * 1000);
+      }
+    }
+
+    // 6. Atualização do SpatialHashGrid para Broad-Phase
+    this.spatialGrid.update(
+      'vehicle_buggy',
+      { x: this.vehicleTransform.x, y: this.vehicleTransform.y, z: this.vehicleTransform.z },
+      2.0,
+    );
+
+    if (!isDriving) {
+      this.spatialGrid.update(
+        'hero_local',
+        { x: this.heroTransform.x, y: this.heroTransform.y, z: this.heroTransform.z },
+        0.6,
+      );
+    } else {
+      this.spatialGrid.remove('hero_local');
+    }
+
+    // 7. Simulação Balística e Testes de Impacto de Projéteis
+    updateCombatSystem(
+      this.activeProjectiles,
+      this.projectilePool,
+      this.spatialGrid,
+      dt,
+      this.bounds,
+      this.vehicleTransform,
+      this.modularVehicle,
+      this.debrisPool,
+      this.activeDebris,
+      (dmg) => {
+        this.recentDamageEvents.push(dmg);
+        if (this.recentDamageEvents.length > 50) {
+          this.recentDamageEvents.shift();
+        }
+      },
+    );
+
+    // 8. Se ainda estiver dirigindo, acopla o herói ao assento do veículo
     if (this.isDriving()) {
       this.heroTransform.x = this.vehicleTransform.x;
       this.heroTransform.y = this.vehicleTransform.y + 0.35;
@@ -418,5 +481,129 @@ export class GameWorld {
 
   public clearPendingInputs(): void {
     this.pendingInputs.length = 0;
+  }
+
+  // --- MÉTODOS DE ARSENAL & COMBATE LEGO ---
+
+  /**
+   * Retorna a arma atualmente equipada pelo jogador local.
+   */
+  public getEquippedWeapon(): WeaponType {
+    return this.currentWeapon;
+  }
+
+  /**
+   * Equipa uma arma do arsenal fictício ('stud_blaster' | 'scatter_shot' | 'spring_mine').
+   */
+  public setEquippedWeapon(weapon: WeaponType): boolean {
+    if (!WEAPON_CATALOG[weapon]) {
+      return false;
+    }
+    this.currentWeapon = weapon;
+    return true;
+  }
+
+  /**
+   * Retorna o tempo restante de cooldown da arma em milissegundos.
+   */
+  public getWeaponCooldownRemaining(weapon: WeaponType = this.currentWeapon): number {
+    return this.weaponCooldowns[weapon] ?? 0;
+  }
+
+  /**
+   * Retorna a fração normalizada (0 a 1) do cooldown da arma (0 = pronta, 1 = recém disparada).
+   */
+  public getWeaponCooldownRatio(weapon: WeaponType = this.currentWeapon): number {
+    const config = WEAPON_CATALOG[weapon];
+    if (!config || config.cooldownMs <= 0) return 0;
+    return Math.min(1, Math.max(0, (this.weaponCooldowns[weapon] ?? 0) / config.cooldownMs));
+  }
+
+  /**
+   * Checa se a arma equipada está pronta para disparar.
+   */
+  public canShootCurrentWeapon(): boolean {
+    return (this.weaponCooldowns[this.currentWeapon] ?? 0) <= 0;
+  }
+
+  /**
+   * Realiza o disparo da arma equipada, aplicando predição imediata local dos projéteis.
+   */
+  public shootCurrentWeapon(
+    customOrigin?: Vector3D,
+    customDirection?: Vector3D,
+  ): {
+    success: boolean;
+    projectilesSpawned: number;
+    weaponType: WeaponType;
+    origin: Vector3D;
+    direction: Vector3D;
+  } {
+    const weaponType = this.currentWeapon;
+    const config = WEAPON_CATALOG[weaponType];
+
+    if (!config || (this.weaponCooldowns[weaponType] ?? 0) > 0) {
+      const defaultOrigin: Vector3D = {
+        x: this.isDriving() ? this.vehicleTransform.x : this.heroTransform.x,
+        y: this.isDriving() ? this.vehicleTransform.y + 0.6 : this.heroTransform.y + 0.8,
+        z: this.isDriving() ? this.vehicleTransform.z : this.heroTransform.z,
+      };
+      const angle = this.isDriving() ? this.vehicleTransform.rotationY : this.heroTransform.rotationY;
+      const defaultDir: Vector3D = { x: Math.sin(angle), y: 0, z: Math.cos(angle) };
+
+      return {
+        success: false,
+        projectilesSpawned: 0,
+        weaponType,
+        origin: customOrigin ?? defaultOrigin,
+        direction: customDirection ?? defaultDir,
+      };
+    }
+
+    // Calcula ponto de emissão e vetor direcional padrão com base no estado do herói/veículo
+    const angle = this.isDriving() ? this.vehicleTransform.rotationY : this.heroTransform.rotationY;
+    const defaultOrigin: Vector3D = {
+      x: this.isDriving() ? this.vehicleTransform.x : this.heroTransform.x,
+      y: this.isDriving() ? this.vehicleTransform.y + 0.6 : this.heroTransform.y + 0.8,
+      z: this.isDriving() ? this.vehicleTransform.z : this.heroTransform.z,
+    };
+    const defaultDir: Vector3D = {
+      x: Math.sin(angle),
+      y: 0,
+      z: Math.cos(angle),
+    };
+
+    const origin = customOrigin ?? defaultOrigin;
+    const direction = customDirection ?? defaultDir;
+
+    // Aplica o cooldown
+    this.weaponCooldowns[weaponType] = config.cooldownMs;
+
+    // Ejeta os projéteis no pool local (predição imediata)
+    const spawned = spawnProjectiles(
+      weaponType,
+      'hero_local',
+      origin,
+      direction,
+      this.projectilePool,
+      this.activeProjectiles,
+    );
+
+    return {
+      success: true,
+      projectilesSpawned: spawned,
+      weaponType,
+      origin,
+      direction,
+    };
+  }
+
+  /**
+   * Consome e limpa a lista de eventos de dano recentes detectados pela simulação.
+   */
+  public flushRecentDamageEvents(): LocalDamageEvent[] {
+    const events = [...this.recentDamageEvents];
+    this.recentDamageEvents.length = 0;
+    return events;
   }
 }

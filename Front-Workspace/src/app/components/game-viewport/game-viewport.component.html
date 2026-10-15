@@ -1,6 +1,24 @@
 <div #viewportContainer class="viewport-container" tabindex="0" role="region" aria-label="Visualizador da Arena 3D de Blocos">
   <canvas #renderCanvas class="render-canvas"></canvas>
 
+  <!-- Floating Combat Text Overlay -->
+  <div class="combat-text-container" aria-hidden="true">
+    @for (item of floatingTexts(); track item.id) {
+      @if (item.visible) {
+        <div
+          class="floating-combat-number"
+          [style.left.px]="item.screenX"
+          [style.top.px]="item.screenY"
+          [style.color]="item.color"
+          [style.opacity]="item.opacity"
+          [style.transform]="'translate(-50%, -50%) scale(' + item.scale + ')'"
+        >
+          {{ item.text }}
+        </div>
+      }
+    }
+  </div>
+
   <!-- Top Left: Brand & Status -->
   <div class="hud-top-left" aria-hidden="true">
     <div class="badge-brand">
@@ -76,15 +94,76 @@
     }
   </div>
 
+  <!-- Bottom Left: Weapon Card -->
+  <div class="hud-weapon-card" aria-label="Arma Equipada">
+    <div class="weapon-header">
+      <span class="weapon-icon">
+        @switch (equippedWeapon()) {
+          @case ('stud_blaster') { 🟡 }
+          @case ('scatter_shot') { 🟦 }
+          @case ('spring_mine') { 💣 }
+        }
+      </span>
+      <div class="weapon-info">
+        <span class="weapon-title">ARMA EQUIPADA</span>
+        <span class="weapon-name">{{ equippedWeaponName() }}</span>
+      </div>
+    </div>
+
+    <!-- Barra de Cooldown -->
+    <div class="weapon-cooldown-bar">
+      <div
+        class="weapon-cooldown-fill"
+        [style.width.%]="weaponCooldownProgress()"
+        [class.cooldown-active]="weaponCooldownProgress() > 0"
+      ></div>
+    </div>
+
+    <div class="weapon-hotkeys">
+      <button
+        type="button"
+        class="weapon-btn"
+        [class.active]="equippedWeapon() === 'stud_blaster'"
+        (click)="equipWeapon('stud_blaster')"
+      >
+        <kbd>[1]</kbd> Blaster
+      </button>
+      <button
+        type="button"
+        class="weapon-btn"
+        [class.active]="equippedWeapon() === 'scatter_shot'"
+        (click)="equipWeapon('scatter_shot')"
+      >
+        <kbd>[2]</kbd> Scatter
+      </button>
+      <button
+        type="button"
+        class="weapon-btn"
+        [class.active]="equippedWeapon() === 'spring_mine'"
+        (click)="equipWeapon('spring_mine')"
+      >
+        <kbd>[3]</kbd> Mina
+      </button>
+    </div>
+  </div>
+
   <!-- Bottom: Controls Help -->
   <div class="instructions-panel" aria-hidden="true">
     <div class="instruction-item">
       <kbd>W A S D</kbd>
-      <span>{{ isDriving() ? 'Acelerar / Marcha Ré / Curva' : 'Movimento do Herói' }}</span>
+      <span>{{ isDriving() ? 'Acelerar / Ré / Curva' : 'Movimento do Herói' }}</span>
     </div>
     <div class="instruction-item">
       <kbd>Espaço</kbd>
-      <span>{{ isDriving() ? 'Freio de Mão & Drift' : 'Pular' }}</span>
+      <span>{{ isDriving() ? 'Freio & Drift' : 'Pular' }}</span>
+    </div>
+    <div class="instruction-item">
+      <kbd>J / Clique</kbd>
+      <span>Disparar</span>
+    </div>
+    <div class="instruction-item">
+      <kbd>1 2 3</kbd>
+      <span>Armas</span>
     </div>
     @if (isDriving() && canDismount()) {
       <div class="instruction-item">
@@ -97,9 +176,5 @@
         <span>Entrar</span>
       </div>
     }
-    <div class="instruction-item">
-      <kbd>Mouse</kbd>
-      <span>Girar Câmera</span>
-    </div>
   </div>
 </div>
