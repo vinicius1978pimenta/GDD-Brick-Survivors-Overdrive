@@ -365,4 +365,132 @@ describe('GameViewportComponent', () => {
     expect(floatingNum).not.toBeNull();
     expect(floatingNum?.textContent).toContain('-15');
   });
+
+  it('deve renderizar ícones Iconify (<iconify-icon>) em múltiplos elementos do HUD', () => {
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    const iconElements = compiled.querySelectorAll('iconify-icon');
+    expect(iconElements.length).toBeGreaterThan(0);
+
+    const brandIcon = compiled.querySelector('.badge-brand iconify-icon');
+    expect(brandIcon).not.toBeNull();
+    expect(brandIcon?.getAttribute('icon')).toBe('mdi:toy-brick');
+
+    const networkIcon = compiled.querySelector('.badge-network iconify-icon');
+    expect(networkIcon).not.toBeNull();
+  });
+
+  it('deve atualizar o visual da arma na mão do personagem ao invocar equipWeapon', () => {
+    fixture.detectChanges();
+
+    expect(() => {
+      component.equipWeapon('scatter_shot');
+      component.equipWeapon('spring_mine');
+      component.equipWeapon('stud_blaster');
+    }).not.toThrow();
+  });
+
+  it('deve permitir disparar com clique do botão esquerdo do mouse (pointerdown / click)', () => {
+    fixture.detectChanges();
+    const shootSpy = vi.spyOn(component.world, 'shootCurrentWeapon');
+
+    const canvas = fixture.nativeElement.querySelector('canvas.render-canvas') as HTMLCanvasElement;
+    expect(canvas).not.toBeNull();
+
+    const pointerEvent = typeof PointerEvent !== 'undefined'
+      ? new PointerEvent('pointerdown', { button: 0 })
+      : (new MouseEvent('pointerdown', { button: 0 }) as unknown as PointerEvent);
+
+    canvas.dispatchEvent(pointerEvent);
+    expect(shootSpy).toHaveBeenCalled();
+  });
+
+  it('deve exibir a mira central (crosshair reticle) e reagir ao disparo e troca de armas', () => {
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    const crosshair = compiled.querySelector('.crosshair-container');
+    expect(crosshair).not.toBeNull();
+    expect(crosshair?.querySelector('.crosshair-dot')).not.toBeNull();
+    expect(crosshair?.querySelector('.crosshair-ring')).not.toBeNull();
+    expect(crosshair?.querySelectorAll('.crosshair-line').length).toBe(4);
+
+    // Blaster padrão
+    expect(crosshair?.getAttribute('data-weapon')).toBe('stud_blaster');
+
+    // Scatter shot -> ciano
+    component.equipWeapon('scatter_shot');
+    fixture.detectChanges();
+    expect(crosshair?.getAttribute('data-weapon')).toBe('scatter_shot');
+
+    // Mina -> vermelho
+    component.equipWeapon('spring_mine');
+    fixture.detectChanges();
+    expect(crosshair?.getAttribute('data-weapon')).toBe('spring_mine');
+
+    // Disparo ativa recoil bloom (.crosshair-firing)
+    component.isShootingRecoil.set(true);
+    fixture.detectChanges();
+    expect(crosshair?.classList.contains('crosshair-firing')).toBe(true);
+
+    component.isShootingRecoil.set(false);
+    fixture.detectChanges();
+    expect(crosshair?.classList.contains('crosshair-firing')).toBe(false);
+  });
+
+  it('deve atualizar dinamicamente a posição da mira no mouse via pointermove', () => {
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    const moveEvent = typeof PointerEvent !== 'undefined'
+      ? new PointerEvent('pointermove', { clientX: 520, clientY: 340 })
+      : (new MouseEvent('pointermove', { clientX: 520, clientY: 340 }) as unknown as PointerEvent);
+
+    window.dispatchEvent(moveEvent);
+    fixture.detectChanges();
+
+    expect(component.crosshairX()).toBeGreaterThan(0);
+    expect(component.crosshairY()).toBeGreaterThan(0);
+
+    const crosshair = compiled.querySelector('.crosshair-container') as HTMLElement;
+    expect(crosshair).not.toBeNull();
+    expect(crosshair.style.left).toContain('px');
+    expect(crosshair.style.top).toContain('px');
+  });
+
+  it('deve calcular direção 3D e rotacionar o herói na direção do mouse ao disparar', () => {
+    fixture.detectChanges();
+    const shootSpy = vi.spyOn(component.world, 'shootCurrentWeapon');
+
+    component.world.heroTransform.x = 0;
+    component.world.heroTransform.z = 0;
+    component.world.vehicleComponent.driverEntityId = null; // A pé
+
+    // Simula mira 3D à direita (+X)
+    component['aimTarget3D'].set(5, 0, 0);
+    component.handleShoot();
+
+    expect(shootSpy).toHaveBeenCalled();
+    const [calledOrigin, calledDirection] = shootSpy.mock.calls[0];
+    expect(calledDirection?.x).toBeGreaterThan(0.9); // Apontando para +X
+    expect(component.world.heroTransform.rotationY).toBeCloseTo(Math.PI * 0.5, 1);
+  });
+
+  it('deve mover o personagem para frente na direção em que o mouse estiver apontando', () => {
+    fixture.detectChanges();
+    component.world.heroTransform.x = 0;
+    component.world.heroTransform.z = 0;
+    component.world.vehicleComponent.driverEntityId = null;
+
+    // Mouse apontando para +X
+    component['aimTarget3D'].set(10, 0, 0);
+    component.world.setInput({ forward: true });
+
+    component['updateGameLogic'](0.1, 0.1);
+
+    expect(component.world.heroTransform.rotationY).toBeCloseTo(Math.PI * 0.5, 1);
+    expect(component.world.heroTransform.x).toBeGreaterThan(0);
+  });
 });
+

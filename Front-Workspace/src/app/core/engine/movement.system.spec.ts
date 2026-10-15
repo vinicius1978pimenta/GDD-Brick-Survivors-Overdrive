@@ -5,7 +5,11 @@ import {
   TransformComponent,
   VelocityComponent,
 } from './types';
-import { normalizeAngleDifference, updateMovementSystem } from './movement.system';
+import {
+  normalizeAngleDifference,
+  resolvePedestrianVehicleCollision,
+  updateMovementSystem,
+} from './movement.system';
 
 describe('MovementSystem', () => {
   let transform: TransformComponent;
@@ -177,4 +181,99 @@ describe('MovementSystem', () => {
       expect(controller.isGrounded).toBe(true);
     });
   });
+
+  describe('resolvePedestrianVehicleCollision (Física Sólida Carro vs Pedestre)', () => {
+    let heroTransform: TransformComponent;
+    let heroVelocity: VelocityComponent;
+    let vehicleTransform: TransformComponent;
+
+    beforeEach(() => {
+      heroTransform = { x: 0, y: 0, z: 0, rotationY: 0 };
+      heroVelocity = { vx: 0, vy: 0, vz: 0, angularVelocityY: 0 };
+      vehicleTransform = { x: 5, y: 0, z: 5, rotationY: 0 };
+    });
+
+    it('não deve colidir nem alterar posição quando o pedestre estiver distante do veículo', () => {
+      heroTransform.x = 0;
+      heroTransform.z = 0;
+      const collided = resolvePedestrianVehicleCollision(
+        heroTransform,
+        heroVelocity,
+        vehicleTransform
+      );
+
+      expect(collided).toBe(false);
+      expect(heroTransform.x).toBe(0);
+      expect(heroTransform.z).toBe(0);
+    });
+
+    it('deve repelir o pedestre para fora pela lateral (+X) quando penetrar pela direita do veículo', () => {
+      // Veículo em (0, 0, 0) sem rotação. Metade da largura = 1.0, raio = 0.55 => limite lateral = 1.55
+      vehicleTransform.x = 0;
+      vehicleTransform.z = 0;
+      heroTransform.x = 1.2; // Penetração de 0.35 no eixo X
+      heroTransform.z = 0;
+      heroVelocity.vx = -2.0;
+
+      const collided = resolvePedestrianVehicleCollision(
+        heroTransform,
+        heroVelocity,
+        vehicleTransform,
+        0.55,
+        1.0,
+        1.6
+      );
+
+      expect(collided).toBe(true);
+      // Deve ter sido empurrado para além de 1.55 no eixo X
+      expect(heroTransform.x).toBeGreaterThanOrEqual(1.55);
+      // Velocidade apontando para o veículo deve ser amortecida
+      expect(heroVelocity.vx).toBeGreaterThanOrEqual(0);
+    });
+
+    it('deve repelir o pedestre pela frente (+Z) quando penetrar pelo capô do veículo', () => {
+      vehicleTransform.x = 0;
+      vehicleTransform.z = 0;
+      heroTransform.x = 0;
+      heroTransform.z = 1.8; // Metade do comprimento = 1.6 + raio 0.55 = 2.15 limite. 1.8 está dentro!
+      heroVelocity.vz = -3.0;
+
+      const collided = resolvePedestrianVehicleCollision(
+        heroTransform,
+        heroVelocity,
+        vehicleTransform,
+        0.55,
+        1.0,
+        1.6
+      );
+
+      expect(collided).toBe(true);
+      expect(heroTransform.z).toBeGreaterThanOrEqual(2.15);
+      expect(heroVelocity.vz).toBeGreaterThanOrEqual(0);
+    });
+
+    it('deve funcionar corretamente com o veículo rotacionado em 90 graus (OBB transform)', () => {
+      vehicleTransform.x = 0;
+      vehicleTransform.z = 0;
+      vehicleTransform.rotationY = Math.PI * 0.5; // Girado 90 graus no sentido anti-horário
+      // O eixo longitudinal do veículo agora está alinhado com o eixo X mundial
+      heroTransform.x = 1.8; // Dentro do comprimento no eixo X
+      heroTransform.z = 0;
+
+      const collided = resolvePedestrianVehicleCollision(
+        heroTransform,
+        heroVelocity,
+        vehicleTransform,
+        0.55,
+        1.0,
+        1.6
+      );
+
+      expect(collided).toBe(true);
+      // Deve empurrar para fora
+      const dist = Math.hypot(heroTransform.x, heroTransform.z);
+      expect(dist).toBeGreaterThanOrEqual(2.15);
+    });
+  });
 });
+

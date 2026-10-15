@@ -13,17 +13,18 @@
   height: 100%;
   position: relative;
   outline: none;
+  cursor: none !important;
 }
 
 .render-canvas {
   width: 100%;
   height: 100%;
   display: block;
-  cursor: grab;
+  cursor: none !important;
 }
 
 .render-canvas:active {
-  cursor: grabbing;
+  cursor: none !important;
 }
 
 /* Top Left HUD */
@@ -55,12 +56,17 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+iconify-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+
 .stud-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #e52521;
-  box-shadow: 0 0 8px #e52521;
+  font-size: 1.1rem;
+  color: #e52521;
+  filter: drop-shadow(0 0 6px rgba(229, 37, 33, 0.8));
 }
 
 .badge-network {
@@ -508,3 +514,187 @@
   font-size: 0.62rem;
   color: #94a3b8;
 }
+
+/* Iconify Icon Specific Stylings */
+.network-dot-icon {
+  font-size: 0.95rem;
+}
+
+.mode-icon {
+  font-size: 0.9rem;
+}
+
+.hud-stat-icon {
+  font-size: 1.25rem;
+  color: #38bdf8;
+  margin-right: 0.2rem;
+  align-self: center;
+}
+
+.durability-icon {
+  font-size: 1.05rem;
+}
+
+.prompt-icon {
+  font-size: 1.2rem;
+}
+
+.instruction-icon {
+  font-size: 0.95rem;
+  color: #cbd5e1;
+}
+
+.weapon-active-icon {
+  font-size: 1.5rem;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.color-blaster {
+  color: #fcd116;
+  filter: drop-shadow(0 0 8px rgba(252, 209, 22, 0.65));
+}
+
+.color-scatter {
+  color: #38bdf8;
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.65));
+}
+
+.color-mine {
+  color: #ef4444;
+  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.65));
+}
+
+/* Crosshair Reticle (Mira Dinâmica no Mouse) */
+.crosshair-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  pointer-events: none;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.92;
+  will-change: left, top, transform;
+  transition: opacity 0.2s ease, transform 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.crosshair-container.crosshair-driving {
+  opacity: 0.45;
+  transform: translate(-50%, -50%) scale(0.85);
+}
+
+.crosshair-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: #fcd116;
+  box-shadow: 0 0 8px #fcd116;
+  transition: transform 0.1s ease, background-color 0.2s ease;
+}
+
+.crosshair-ring {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(252, 209, 22, 0.45);
+  box-shadow: 0 0 6px rgba(252, 209, 22, 0.3);
+  transition: all 0.15s ease;
+}
+
+.crosshair-line {
+  position: absolute;
+  background-color: #fcd116;
+  box-shadow: 0 0 6px rgba(252, 209, 22, 0.6);
+  border-radius: 1px;
+  transition: transform 0.12s ease-out, background-color 0.2s ease;
+}
+
+.crosshair-line.crosshair-top {
+  width: 2px;
+  height: 7px;
+  top: 4px;
+  left: calc(50% - 1px);
+}
+
+.crosshair-line.crosshair-bottom {
+  width: 2px;
+  height: 7px;
+  bottom: 4px;
+  left: calc(50% - 1px);
+}
+
+.crosshair-line.crosshair-left {
+  width: 7px;
+  height: 2px;
+  left: 4px;
+  top: calc(50% - 1px);
+}
+
+.crosshair-line.crosshair-right {
+  width: 7px;
+  height: 2px;
+  right: 4px;
+  top: calc(50% - 1px);
+}
+
+/* Arma Scatter Shot (Ciano Neon) */
+.crosshair-container[data-weapon="scatter_shot"] .crosshair-dot,
+.crosshair-container[data-weapon="scatter_shot"] .crosshair-line {
+  background-color: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.7);
+}
+
+.crosshair-container[data-weapon="scatter_shot"] .crosshair-ring {
+  border-color: rgba(56, 189, 248, 0.55);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+/* Arma Spring Mine (Vermelho Alerta) */
+.crosshair-container[data-weapon="spring_mine"] .crosshair-dot,
+.crosshair-container[data-weapon="spring_mine"] .crosshair-line {
+  background-color: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
+}
+
+.crosshair-container[data-weapon="spring_mine"] .crosshair-ring {
+  border-color: rgba(239, 68, 68, 0.55);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+/* Efeito de Disparo / Recoil Bloom */
+.crosshair-container.crosshair-firing {
+  transform: translate(-50%, -50%) scale(1.3);
+}
+
+.crosshair-container.crosshair-firing .crosshair-dot {
+  transform: scale(1.6);
+  box-shadow: 0 0 14px currentColor;
+}
+
+.crosshair-container.crosshair-firing .crosshair-ring {
+  transform: scale(1.35);
+  border-width: 2px;
+}
+
+.crosshair-container.crosshair-firing .crosshair-top {
+  transform: translateY(-4px);
+}
+
+.crosshair-container.crosshair-firing .crosshair-bottom {
+  transform: translateY(4px);
+}
+
+.crosshair-container.crosshair-firing .crosshair-left {
+  transform: translateX(-4px);
+}
+
+.crosshair-container.crosshair-firing .crosshair-right {
+  transform: translateX(4px);
+}
+
+

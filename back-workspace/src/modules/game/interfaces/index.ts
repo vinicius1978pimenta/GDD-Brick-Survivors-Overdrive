@@ -6,8 +6,10 @@ export type {
 
 export {
   ARENA_BOUNDS,
+  HERO_COLLISION_CONFIG,
   PLAYER_CONFIG,
   SIMULATION_CONFIG,
+  VEHICLE_COLLISION_CONFIG,
   VEHICLE_CONFIG,
 } from './game-room.interface.js';
 

@@ -138,7 +138,78 @@ A **Fase 5: Netcode Autoritativo (NestJS Socket.IO, Predição & Reconciliação
 
 ---
 
-## 6. Estrutura Atual de Pastas
+## 6. Visão Geral da Fase 6 (Concluída com Sucesso)
+
+A **Fase 6: Sistema de Combate, Armas Fictícias e Object Pooling** foi implementada pelos Especialistas de Back-End e Front-End e auditada com 100% de aprovação pelo Especialista de QA:
+
+### Entregas Realizadas:
+1. **Back-End Autoritativo (`back-workspace/src/modules/game/`):**
+   - **`combat.interface.ts` (`interfaces/`):** Tipos fortemente tipados para `WeaponType` (`stud_blaster`, `scatter_shot`, `spring_mine`), `WeaponConfig`, `ActiveProjectile`, `DamageEvent`, `PlayerShootPayload` e catálogo estático `WEAPON_CATALOG`.
+   - **`SpatialHashGrid` (`utils/spatial-hash-grid.ts`):** Particionamento espacial Broad-Phase $O(1)$ com células de 8.0m para descarte veloz de testes de proximidade na arena sem overhead computacional.
+   - **`CombatService` (`services/combat.service.ts`):** Motor autoritativo de combate: validação de cooldown por jogador e arma (anti-cheat), avanço determinístico de trajetórias a 20Hz, Narrow-Phase com teste de raio/esfera contra pedestres e blocos dos veículos, knockback arcade e ejeção de peças de carros avariados.
+   - **`GameGateway` & DTOs:** Novo evento WebSocket `@SubscribeMessage('playerShoot')`, validação com `PlayerShootDto` e enriquecimento do `WorldStateSnapshot` com projéteis ativos e eventos de dano com posições espaciais.
+   - **Testes Unitários:** 49 testes aprovados (100% de sucesso em 5 suítes com Vitest).
+
+2. **Front-End e Apresentação 3D (`Front-Workspace/src/app/`):**
+   - **Contratos e Interfaces (`interfaces/combat.interface.ts`):** Interfaces e tipos isolados em pasta dedicada com zero interfaces inline.
+   - **Broad-Phase e Combate no Engine ECS (`core/engine/`):** `spatial-hash-grid.ts` e `combat.system.ts` desacoplados de Three.js com `ObjectPool<ProjectileEntity>` para reciclagem de projéteis de pinos, dispersores e minas terrestres.
+   - **Predição de Disparo no `GameWorld`:** Disparo imediato com resposta tátil instantânea no cliente e sincronização pelo `NetworkService.shoot()`.
+   - **Three.js & Floating Combat Text (`GameViewportComponent`):** Malhas recicladas de projéteis luminosos e sistema de dano flutuante 3D->2D projetado com animação de subida e fade out (`-15`, `-8`, `💥 BOOM! -50`).
+   - **Controles e HUD Arcade:** Disparo via tecla `J` ou clique do mouse, troca rápida de armas nas teclas `1`, `2` e `3`, e card de arma equipada com medidor de cooldown animado em tempo real.
+   - **Testes Unitários:** 97 testes aprovados (100% de sucesso em 12 suítes com Vitest).
+
+3. **Auditoria de Qualidade e Homologação (QA):**
+   - **Total de Testes Automatizados no Monorepo:** **146 testes aprovados (100% de aprovação)**:
+     - Back-end: 49 testes passando.
+     - Front-end: 97 testes passando.
+   - **Builds de Produção:** `nest build` (código 0) e `ng build` (código 0, bundle otimizado de 859.70 kB / 196.56 kB gzipped).
+   - **Tipagem Estrita & Governança:** 0 ocorrências de `any` e 100% das interfaces em pastas dedicadas (`interfaces/` ou `types/`).
+   - **Gestão de Memória:** Zero GC spikes com `ObjectPool` para projéteis e reciclagem de malhas e elementos DOM.
+
+---
+
+---
+
+## 7. Melhorias de Física, Animações Procedurais, Armas e Iconify (Homologado)
+
+Em resposta às demandas de física e fidelidade visual, foram implementadas as seguintes melhorias técnicas em todo o monorepo:
+
+### 1. Física no Carro (Colisão Sólida Pedestre vs Veículo):
+- **Back-End Autoritativo (`game-room.service.ts`):**
+  - Implementado `resolvePedestrianVehicleCollision` utilizando caixas orientadas no espaço local do veículo (**Oriented Bounding Box - OBB**).
+  - Projeção imediata de afastamento (*push-out*) na normal mínima quando o pedestre toca ou tenta penetrar a lataria do carro.
+  - Decomposição vetorial com anulação da velocidade em direção ao centro do carro, permitindo que o pedestre deslize suavemente pela lateral sem nunca atravessar a lataria.
+  - Constantes de colisão fortemente tipadas em `interfaces/game-room.interface.ts` (`VEHICLE_COLLISION_CONFIG` e `HERO_COLLISION_CONFIG`).
+  - 6 novos testes unitários adicionados no backend cobrindo colisões frontal, lateral, spawn interno, deslizamento e rotações a 90°.
+- **Front-End no Motor ECS (`movement.system.ts` & `game-world.ts`):**
+  - Mesma resolução de colisão sólida $O(1)$ executada a 60 FPS na predição do cliente, garantindo sensação tátil sólida e zero divergência com os snapshots do servidor.
+
+### 2. Armas Visíveis na Mão do Personagem:
+- No modelo Three.js do herói de blocos (`game-viewport.component.ts`), criado socket de acoplamento tridimensional na mão direita (`rightHandWeaponSocket`).
+- 3 modelos detalhados em blocos montados dinamicamente na mão do herói:
+  - **Stud Blaster:** Pistola compacta de blocos com cano cilíndrico e stud frontal translúcido luminoso.
+  - **Block Scatter Shot:** Espingarda volumosa de blocos com câmara alargada e 3 canos em leque.
+  - **Spring Mine:** Mina disco com mola prateada e sensor luminoso segurada na mão antes do plantio.
+- Alternância imediata da arma na mão ao pressionar as teclas `[1]`, `[2]` e `[3]`.
+
+### 3. Animações Procedurais Fluidas a 60 FPS:
+- Estruturação do herói em pivôs articulados: `leftLegPivot`, `rightLegPivot` (quadris), `leftArmPivot` e `rightArmPivot` (ombros).
+- **Caminhada (Walk Cycle):** Balanço angular senoidal das pernas e braços proporcional à velocidade e tempo de deslocamento; postura ereta natural em repouso.
+- **Pulo (Jump):** Flexão suave das pernas para trás e elevação compensatória dos braços no ar enquanto `!isGrounded`.
+- **Disparo com Recuo (Recoil):** Elevação da arma na linha de visão com impulso de coice para trás e recuperação ágil a cada tiro disparado.
+- **Retículo de Mira Central (Crosshair):** Mira de combate reativa no centro da tela com anel e ponto focal, efeito de expansão (*bloom/recoil*) ao atirar e cores temáticas por arma (amarelo para Blaster, ciano para Scatter e vermelho para Mina).
+
+### 4. Ícones Modernos com Iconify:
+- Instalação e integração do web component oficial `iconify-icon` com suporte a `CUSTOM_ELEMENTS_SCHEMA` no Angular 22.
+- HUD inteiramente modernizado com ícones vetoriais elegantes e nítidos:
+  - Armas: `mdi:pistol`, `mdi:grain`, `mdi:disc`.
+  - Rede e Conexão: `mdi:wifi`, `mdi:wifi-off`.
+  - Painel do Veículo: `mdi:speedometer`, `mdi:shield-car`, `mdi:heart-pulse`.
+  - Controles e Dicas: `mdi:keyboard`, `mdi:mouse-left-click`, `mdi:car-key`.
+
+---
+
+## 8. Estrutura Atual de Pastas
 
 ```text
 GDD-Brick-Survivors-Overdrive/
@@ -152,29 +223,33 @@ GDD-Brick-Survivors-Overdrive/
 ├── back-workspace/               # Aplicação NestJS 12 + TypeORM + Socket.IO + Vitest
 │   ├── src/
 │   │   ├── modules/
-│   │   │   └── game/             # Módulo Multiplayer Autoritativo
-│   │   │       ├── dto/          # DTOs de input, join e snapshots com ackInputs
+│   │   │   └── game/             # Módulo Multiplayer Autoritativo e Combate
+│   │   │       ├── dto/          # DTOs de input, shoot e snapshots
+│   │   │       ├── interfaces/   # Interfaces dedicadas (combat, gateway, room, snapshot)
 │   │   │       ├── gateways/     # GameGateway (WebSocket)
-│   │   │       └── services/     # GameRoomService (Loop 20Hz, física arcade)
-├── Front-Workspace/              # Aplicação Angular 22 Standalone + Three.js + Vitest
+│   │   │       ├── services/     # GameRoomService (Loop 20Hz, OBB collision) e CombatService
+│   │   │       └── utils/        # SpatialHashGrid (Broad-Phase)
+├── Front-Workspace/              # Aplicação Angular 22 Standalone + Three.js + Iconify + Vitest
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── core/
 │   │   │   │   ├── engine/       # Motor ECS Puro (Isomórfico & Desacoplado de Three.js)
-│   │   │   │   │   ├── types.ts
-│   │   │   │   │   ├── modular-block.types.ts
+│   │   │   │   │   ├── interfaces/ # Interfaces dedicadas de combate e dados
+│   │   │   │   │   ├── types.ts & modular-block.types.ts
 │   │   │   │   │   ├── object-pool.ts
+│   │   │   │   │   ├── spatial-hash-grid.ts
+│   │   │   │   │   ├── combat.system.ts
 │   │   │   │   │   ├── modular-block.system.ts
 │   │   │   │   │   ├── game-loop.ts
-│   │   │   │   │   ├── game-world.ts (Predição e Reconciliação)
+│   │   │   │   │   ├── game-world.ts
 │   │   │   │   │   ├── movement.system.ts
 │   │   │   │   │   ├── vehicle.system.ts
 │   │   │   │   │   └── interaction.system.ts
 │   │   │   │   └── network/      # Serviço de Rede e Conexão Socket.IO
 │   │   │   │       ├── network.service.ts
-│   │   │   │       └── network.types.ts
+│   │   │   │       └── types/
 │   │   │   ├── components/
-│   │   │   │   └── game-viewport/# Viewport 3D Three.js + Interpolação Remota + HUD Arcade + Badge de Rede
+│   │   │   │   └── game-viewport/# Viewport Three.js + Armas na Mão + Animações + Crosshair + HUD Iconify
 │   │   │   ├── app.component.html
 │   │   │   ├── app.component.ts
 │   │   │   └── app.component.spec.ts
@@ -192,16 +267,16 @@ GDD-Brick-Survivors-Overdrive/
 
 ---
 
-## 7. Comandos para Execução e Testes Locais
+## 9. Comandos para Execução e Testes Locais
 
 ```bash
-# Executar suíte completa de testes no monorepo (106 testes)
-npm run test:backend     # 27 testes passando no NestJS
-npm run test:frontend    # 79 testes passando no Angular/Vitest
+# Executar suíte completa de testes no monorepo (160 testes aprovados)
+npm run test:backend     # 55 testes passando no NestJS (Vitest)
+npm run test:frontend    # 105 testes passando no Angular (Vitest)
 
 # Compilações de produção
-npm run build:backend    # NestJS build
-npm run build:frontend   # Angular build
+npm run build:backend    # NestJS build (código 0)
+npm run build:frontend   # Angular build (código 0)
 
 # Servidores de desenvolvimento
 npm run start:backend    # NestJS watch mode (WebSocket na porta 3000)

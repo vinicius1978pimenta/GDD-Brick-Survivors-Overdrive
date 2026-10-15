@@ -4,7 +4,10 @@ import {
   canInteractWithVehicle,
   canDismountVehicle,
 } from './interaction.system';
-import { updateMovementSystem } from './movement.system';
+import {
+  updateMovementSystem,
+  resolvePedestrianVehicleCollision,
+} from './movement.system';
 import {
   ArenaBounds,
   CharacterControllerComponent,
@@ -175,6 +178,15 @@ export class GameWorld {
       dt,
       this.bounds,
     );
+
+    // Colisão sólida contra a lataria do veículo quando o herói estiver a pé
+    if (!isDriving) {
+      resolvePedestrianVehicleCollision(
+        this.heroTransform,
+        this.heroVelocity,
+        this.vehicleTransform,
+      );
+    }
 
     // 3. Sistema de Física Veicular com Detecção de Impacto
     const speedBefore = Math.abs(this.vehicleComponent.currentSpeed);

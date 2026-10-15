@@ -4,8 +4,10 @@ import { PlayerInputDto } from '../dto/player-input.dto.js';
 import { WorldStateSnapshotDto } from '../dto/world-state-snapshot.dto.js';
 import {
   ARENA_BOUNDS,
+  HERO_COLLISION_CONFIG,
   PLAYER_CONFIG,
   SIMULATION_CONFIG,
+  VEHICLE_COLLISION_CONFIG,
   VEHICLE_CONFIG,
 } from '../interfaces/index.js';
 import type {
@@ -30,8 +32,10 @@ export type {
 };
 export {
   ARENA_BOUNDS,
+  HERO_COLLISION_CONFIG,
   PLAYER_CONFIG,
   SIMULATION_CONFIG,
+  VEHICLE_COLLISION_CONFIG,
   VEHICLE_CONFIG,
 };
 
@@ -377,6 +381,10 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
     player.x += vx * dt;
     player.z += vz * dt;
 
+    for (const vehicle of this.vehicles.values()) {
+      this.resolvePedestrianVehicleCollision(player, vehicle);
+    }
+
     player.x = this.clamp(player.x, ARENA_BOUNDS.minX, ARENA_BOUNDS.maxX);
     player.z = this.clamp(player.z, ARENA_BOUNDS.minZ, ARENA_BOUNDS.maxZ);
   }
@@ -402,6 +410,110 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
         player.isGrounded = true;
       }
     }
+
+    for (const vehicle of this.vehicles.values()) {
+      this.resolvePedestrianVehicleCollision(player, vehicle);
+    }
+
+    player.x = this.clamp(player.x, ARENA_BOUNDS.minX, ARENA_BOUNDS.maxX);
+    player.z = this.clamp(player.z, ARENA_BOUNDS.minZ, ARENA_BOUNDS.maxZ);
+  }
+
+  public resolvePedestrianVehicleCollision(
+    player: ConnectedPlayer,
+    vehicle: RoomVehicle,
+  ): boolean {
+    if (player.isDriving || player.vehicleId === vehicle.id) {
+      return false;
+    }
+
+    const halfWidth = VEHICLE_COLLISION_CONFIG.halfWidth;
+    const halfLength = VEHICLE_COLLISION_CONFIG.halfLength;
+    const heroRadius = HERO_COLLISION_CONFIG.radius;
+
+    const dx = player.x - vehicle.x;
+    const dz = player.z - vehicle.z;
+
+    const angle = vehicle.rotationY;
+    const forwardX = Math.sin(angle);
+    const forwardZ = Math.cos(angle);
+    const rightX = Math.cos(angle);
+    const rightZ = -Math.sin(angle);
+
+    // Transform relative position into vehicle local coordinate frame
+    const localX = dx * rightX + dz * rightZ;
+    const localZ = dx * forwardX + dz * forwardZ;
+
+    // Find the closest point on the vehicle body rectangle
+    const closestX = Math.max(-halfWidth, Math.min(halfWidth, localX));
+    const closestZ = Math.max(-halfLength, Math.min(halfLength, localZ));
+
+    const diffX = localX - closestX;
+    const diffZ = localZ - closestZ;
+    const distSq = diffX * diffX + diffZ * diffZ;
+
+    let pushLocalX = 0;
+    let pushLocalZ = 0;
+    let normalLocalX = 0;
+    let normalLocalZ = 0;
+
+    if (distSq > 0.000001) {
+      const dist = Math.sqrt(distSq);
+      if (dist < heroRadius) {
+        const penetration = heroRadius - dist;
+        normalLocalX = diffX / dist;
+        normalLocalZ = diffZ / dist;
+        pushLocalX = normalLocalX * penetration;
+        pushLocalZ = normalLocalZ * penetration;
+      } else {
+        return false;
+      }
+    } else {
+      // Player center is deeply inside the vehicle box; push out along nearest axis
+      const penLeft = halfWidth + heroRadius + localX;
+      const penRight = halfWidth + heroRadius - localX;
+      const penBack = halfLength + heroRadius + localZ;
+      const penFront = halfLength + heroRadius - localZ;
+
+      const minPen = Math.min(penLeft, penRight, penBack, penFront);
+
+      if (minPen === penRight) {
+        normalLocalX = 1;
+        pushLocalX = penRight;
+      } else if (minPen === penLeft) {
+        normalLocalX = -1;
+        pushLocalX = -penLeft;
+      } else if (minPen === penFront) {
+        normalLocalZ = 1;
+        pushLocalZ = penFront;
+      } else {
+        normalLocalZ = -1;
+        pushLocalZ = -penBack;
+      }
+    }
+
+    // Convert local push vector and collision normal back to world space
+    const pushWorldX = pushLocalX * rightX + pushLocalZ * forwardX;
+    const pushWorldZ = pushLocalX * rightZ + pushLocalZ * forwardZ;
+    const normalWorldX = normalLocalX * rightX + normalLocalZ * forwardX;
+    const normalWorldZ = normalLocalX * rightZ + normalLocalZ * forwardZ;
+
+    // Apply push-out to project pedestrian outside the vehicle body
+    player.x += pushWorldX;
+    player.z += pushWorldZ;
+
+    // Cancel velocity directed towards the vehicle to allow smooth lateral sliding
+    const velX = Math.sin(player.rotationY) * player.speed;
+    const velZ = Math.cos(player.rotationY) * player.speed;
+    const dot = velX * normalWorldX + velZ * normalWorldZ;
+
+    if (dot < 0) {
+      const tangentVelX = velX - dot * normalWorldX;
+      const tangentVelZ = velZ - dot * normalWorldZ;
+      player.speed = Math.hypot(tangentVelX, tangentVelZ);
+    }
+
+    return true;
   }
 
   private simulateDrivenVehicle(

@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  CUSTOM_ELEMENTS_SCHEMA,
   ElementRef,
   Inject,
   NgZone,
@@ -12,8 +13,15 @@ import {
   ViewChild,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
+import 'iconify-icon';
 import * as THREE from 'three';
-import { GameWorld, ProjectileEntity, WEAPON_CATALOG, WeaponType } from '../../core/engine';
+import {
+  GameWorld,
+  ProjectileEntity,
+  Vector3D,
+  WEAPON_CATALOG,
+  WeaponType,
+} from '../../core/engine';
 import { NetworkService, WorldStateSnapshot } from '../../core/network';
 import { FloatingCombatText, RemotePlayerVisual } from './interfaces/game-viewport.interface';
 
@@ -23,6 +31,7 @@ import { FloatingCombatText, RemotePlayerVisual } from './interfaces/game-viewpo
   templateUrl: './game-viewport.component.html',
   styleUrl: './game-viewport.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 export class GameViewportComponent implements AfterViewInit, OnDestroy {
   @ViewChild('viewportContainer', { static: true })
@@ -49,14 +58,35 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   public readonly equippedWeaponName = computed(() => WEAPON_CATALOG[this.equippedWeapon()].name);
   public readonly weaponCooldownProgress = signal(0);
   public readonly floatingTexts = signal<FloatingCombatText[]>([]);
+  public readonly isShootingRecoil = signal(false);
+
+  // Mira Dinâmica no Mouse & Combate 3D
+  public readonly crosshairX = signal<number>(
+    typeof window !== 'undefined' ? window.innerWidth / 2 : 400,
+  );
+  public readonly crosshairY = signal<number>(
+    typeof window !== 'undefined' ? window.innerHeight / 2 : 300,
+  );
 
   // Instância do mundo de física e regras de jogo (100% desacoplado de Three.js)
   public readonly world = new GameWorld();
+
+  private readonly raycaster = new THREE.Raycaster();
+  private readonly mouseNDC = new THREE.Vector2();
+  private readonly groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private readonly aimTarget3D = new THREE.Vector3(0, 0, 5);
 
   private scene: THREE.Scene | null = null;
   private camera: THREE.PerspectiveCamera | null = null;
   private renderer: THREE.WebGLRenderer | null = null;
   private heroGroup: THREE.Group | null = null;
+  private heroLeftLegPivot: THREE.Group | null = null;
+  private heroRightLegPivot: THREE.Group | null = null;
+  private heroLeftArmPivot: THREE.Group | null = null;
+  private heroRightArmPivot: THREE.Group | null = null;
+  private rightHandWeaponSocket: THREE.Group | null = null;
+  private currentWeaponMeshInHand: THREE.Object3D | null = null;
+  private shootRecoilTimer = 0;
   private vehicleGroup: THREE.Group | null = null;
   private wheelMeshes: THREE.Mesh[] = [];
   private modularBlockMeshes = new Map<string, THREE.Mesh>();
@@ -380,7 +410,9 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Cria o herói de blocos com cabeça, tronco e membros estilizados.
+   * Cria o herói de blocos com visual ultra moderno Cyber-Overdrive Mech:
+   * Capacete cyber-tático com viseira holográfica e crista, exoesqueleto peitoral com Arc Core,
+   * ombreiras táticas nos braços, jetpack de turbinas gêmeas com plasma ativo e grevas reforçadas.
    */
   private createBlockHero(): void {
     if (!this.scene) return;
@@ -388,118 +420,531 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.heroGroup = new THREE.Group();
     this.heroGroup.position.set(0, 0, 0);
 
-    const headMat = new THREE.MeshStandardMaterial({ color: 0xfcd116, roughness: 0.35, metalness: 0.05 });
-    const torsoMat = new THREE.MeshStandardMaterial({ color: 0xe52521, roughness: 0.3, metalness: 0.1 });
-    const hipsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.4, metalness: 0.1 });
-    const legsMat = new THREE.MeshStandardMaterial({ color: 0x0055b8, roughness: 0.35, metalness: 0.1 });
-    const visorMat = new THREE.MeshStandardMaterial({
-      color: 0x00ffff,
-      roughness: 0.15,
+    // Paleta de Materiais PBR Cyber-Táticos de Alta Fidelidade
+    const armorDarkMat = new THREE.MeshStandardMaterial({
+      color: 0x111827,
+      roughness: 0.22,
       metalness: 0.8,
-      emissive: 0x0088aa,
-      emissiveIntensity: 0.6,
     });
-    const backpackMat = new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.4, metalness: 0.2 });
-    const energyCoreMat = new THREE.MeshStandardMaterial({
-      color: 0x10b981,
-      emissive: 0x10b981,
-      emissiveIntensity: 0.8,
+    const armorCobaltMat = new THREE.MeshStandardMaterial({
+      color: 0x0284c7,
+      roughness: 0.2,
+      metalness: 0.7,
+    });
+    const armorGoldMat = new THREE.MeshStandardMaterial({
+      color: 0xf59e0b,
+      roughness: 0.25,
+      metalness: 0.85,
+    });
+    const visorHoloMat = new THREE.MeshStandardMaterial({
+      color: 0x00ffff,
+      roughness: 0.08,
+      metalness: 0.9,
+      emissive: 0x00e5ff,
+      emissiveIntensity: 1.1,
+    });
+    const arcReactorMat = new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      emissive: 0x00f0ff,
+      emissiveIntensity: 2.0,
+      roughness: 0.1,
+    });
+    const thrusterPlasmaMat = new THREE.MeshStandardMaterial({
+      color: 0x06b6d4,
+      emissive: 0x22d3ee,
+      emissiveIntensity: 2.2,
+      roughness: 0.15,
+    });
+    const sensorNeonMat = new THREE.MeshStandardMaterial({
+      color: 0xef4444,
+      emissive: 0xef4444,
+      emissiveIntensity: 1.5,
     });
 
     const legGeo = new THREE.BoxGeometry(0.38, 0.9, 0.45);
-    const leftLeg = new THREE.Mesh(legGeo, legsMat);
-    leftLeg.position.set(-0.25, 0.45, 0);
+    const footGeo = new THREE.BoxGeometry(0.4, 0.22, 0.38);
+    const kneePadGeo = new THREE.BoxGeometry(0.42, 0.24, 0.12);
+
+    // 1. Pivô da Perna Esquerda (com grevas e botas magnéticas)
+    this.heroLeftLegPivot = new THREE.Group();
+    this.heroLeftLegPivot.position.set(-0.25, 0.9, 0);
+
+    const leftLeg = new THREE.Mesh(legGeo, armorCobaltMat);
+    leftLeg.position.set(0, -0.45, 0);
     leftLeg.castShadow = true;
     leftLeg.receiveShadow = true;
-    this.heroGroup.add(leftLeg);
+    this.heroLeftLegPivot.add(leftLeg);
 
-    const rightLeg = new THREE.Mesh(legGeo, legsMat);
-    rightLeg.position.set(0.25, 0.45, 0);
+    // Joelheira tática reforçada
+    const leftKneePad = new THREE.Mesh(kneePadGeo, armorGoldMat);
+    leftKneePad.position.set(0, -0.38, 0.25);
+    leftKneePad.castShadow = true;
+    this.heroLeftLegPivot.add(leftKneePad);
+
+    // Bota blindada com solado magnético escuro
+    const leftFoot = new THREE.Mesh(footGeo, armorDarkMat);
+    leftFoot.position.set(0, -0.8, 0.08);
+    leftFoot.castShadow = true;
+    this.heroLeftLegPivot.add(leftFoot);
+    this.heroGroup.add(this.heroLeftLegPivot);
+
+    // 2. Pivô da Perna Direita (com grevas e botas magnéticas)
+    this.heroRightLegPivot = new THREE.Group();
+    this.heroRightLegPivot.position.set(0.25, 0.9, 0);
+
+    const rightLeg = new THREE.Mesh(legGeo, armorCobaltMat);
+    rightLeg.position.set(0, -0.45, 0);
     rightLeg.castShadow = true;
     rightLeg.receiveShadow = true;
-    this.heroGroup.add(rightLeg);
+    this.heroRightLegPivot.add(rightLeg);
 
-    const footGeo = new THREE.BoxGeometry(0.38, 0.2, 0.2);
-    const leftFoot = new THREE.Mesh(footGeo, legsMat);
-    leftFoot.position.set(-0.25, 0.1, 0.3);
-    leftFoot.castShadow = true;
-    this.heroGroup.add(leftFoot);
+    // Joelheira tática reforçada
+    const rightKneePad = new THREE.Mesh(kneePadGeo, armorGoldMat);
+    rightKneePad.position.set(0, -0.38, 0.25);
+    rightKneePad.castShadow = true;
+    this.heroRightLegPivot.add(rightKneePad);
 
-    const rightFoot = new THREE.Mesh(footGeo, legsMat);
-    rightFoot.position.set(0.25, 0.1, 0.3);
+    // Bota blindada
+    const rightFoot = new THREE.Mesh(footGeo, armorDarkMat);
+    rightFoot.position.set(0, -0.8, 0.08);
     rightFoot.castShadow = true;
-    this.heroGroup.add(rightFoot);
+    this.heroRightLegPivot.add(rightFoot);
+    this.heroGroup.add(this.heroRightLegPivot);
 
-    const hipsGeo = new THREE.BoxGeometry(0.92, 0.25, 0.5);
-    const hips = new THREE.Mesh(hipsGeo, hipsMat);
+    // 3. Cinturão & Pélvis Tática (Tactical Belt & Pelvis)
+    const hipsGeo = new THREE.BoxGeometry(0.96, 0.28, 0.52);
+    const hips = new THREE.Mesh(hipsGeo, armorDarkMat);
     hips.position.set(0, 0.98, 0);
     hips.castShadow = true;
     this.heroGroup.add(hips);
 
-    const torsoGeo = new THREE.BoxGeometry(1.0, 1.1, 0.6);
-    const torso = new THREE.Mesh(torsoGeo, torsoMat);
+    const buckleGeo = new THREE.BoxGeometry(0.28, 0.2, 0.56);
+    const buckle = new THREE.Mesh(buckleGeo, armorGoldMat);
+    buckle.position.set(0, 0.98, 0.02);
+    this.heroGroup.add(buckle);
+
+    // 4. Exoesqueleto / Armadura Peitoral (Layered Armor)
+    const torsoGeo = new THREE.BoxGeometry(1.04, 1.12, 0.62);
+    const torso = new THREE.Mesh(torsoGeo, armorCobaltMat);
     torso.position.set(0, 1.65, 0);
     torso.castShadow = true;
     torso.receiveShadow = true;
     this.heroGroup.add(torso);
 
-    const headGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.6, 20);
-    const head = new THREE.Mesh(headGeo, headMat);
+    // Placas de blindagem peitoral angular sobreposta
+    const chestPlateGeo = new THREE.BoxGeometry(0.96, 0.58, 0.12);
+    const chestPlate = new THREE.Mesh(chestPlateGeo, armorDarkMat);
+    chestPlate.position.set(0, 1.76, 0.32);
+    chestPlate.castShadow = true;
+    this.heroGroup.add(chestPlate);
+
+    // Reator Arc Core central com anel de contenção
+    const reactorRingGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.14, 20);
+    const reactorRing = new THREE.Mesh(reactorRingGeo, armorGoldMat);
+    reactorRing.rotation.x = Math.PI / 2;
+    reactorRing.position.set(0, 1.76, 0.39);
+    this.heroGroup.add(reactorRing);
+
+    const reactorCoreGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.16, 16);
+    const reactorCore = new THREE.Mesh(reactorCoreGeo, arcReactorMat);
+    reactorCore.rotation.x = Math.PI / 2;
+    reactorCore.position.set(0, 1.76, 0.4);
+    this.heroGroup.add(reactorCore);
+
+    // 5. Capacete Cyber-Tático (Cyber-Tactical Helmet)
+    const headGeo = new THREE.CylinderGeometry(0.38, 0.42, 0.62, 20);
+    const head = new THREE.Mesh(headGeo, armorDarkMat);
     head.position.set(0, 2.45, 0);
     head.castShadow = true;
     this.heroGroup.add(head);
 
-    const studGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.16, 16);
-    const headStud = new THREE.Mesh(studGeo, headMat);
-    headStud.position.set(0, 2.82, 0);
-    headStud.castShadow = true;
+    // Crista Aerodinâmica no topo do capacete
+    const crestFinGeo = new THREE.BoxGeometry(0.08, 0.22, 0.58);
+    const crestFin = new THREE.Mesh(crestFinGeo, armorGoldMat);
+    crestFin.position.set(0, 2.82, 0.02);
+    crestFin.castShadow = true;
+    this.heroGroup.add(crestFin);
+
+    // Stud superior do capacete LEGO mecha
+    const studGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.14, 16);
+    const headStud = new THREE.Mesh(studGeo, armorCobaltMat);
+    headStud.position.set(0, 2.86, -0.05);
     this.heroGroup.add(headStud);
 
-    const visorGeo = new THREE.BoxGeometry(0.5, 0.16, 0.16);
-    const visor = new THREE.Mesh(visorGeo, visorMat);
-    visor.position.set(0, 2.48, 0.32);
+    // Viseira Holográfica Chanfrada
+    const visorGeo = new THREE.BoxGeometry(0.54, 0.2, 0.22);
+    const visor = new THREE.Mesh(visorGeo, visorHoloMat);
+    visor.position.set(0, 2.5, 0.33);
     this.heroGroup.add(visor);
 
-    const armGeo = new THREE.BoxGeometry(0.26, 0.85, 0.3);
-    const handGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.16, 12);
+    // Respirador Tático Angular
+    const respiratorGeo = new THREE.BoxGeometry(0.38, 0.18, 0.18);
+    const respirator = new THREE.Mesh(respiratorGeo, armorDarkMat);
+    respirator.position.set(0, 2.28, 0.35);
+    this.heroGroup.add(respirator);
 
-    const leftArm = new THREE.Mesh(armGeo, torsoMat);
-    leftArm.position.set(-0.68, 1.65, 0);
-    leftArm.rotation.z = 0.12;
+    // Sensor Tático / Headset com LED
+    const headsetGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.08, 12);
+    const headset = new THREE.Mesh(headsetGeo, armorGoldMat);
+    headset.rotation.z = Math.PI / 2;
+    headset.position.set(0.44, 2.48, 0.05);
+    this.heroGroup.add(headset);
+
+    const sensorLedGeo = new THREE.BoxGeometry(0.04, 0.04, 0.1);
+    const sensorLed = new THREE.Mesh(sensorLedGeo, sensorNeonMat);
+    sensorLed.position.set(0.46, 2.48, 0.16);
+    this.heroGroup.add(sensorLed);
+
+    // 6. Braços Articulados com Ombreiras Táticas (Shoulder Pauldrons)
+    const armGeo = new THREE.BoxGeometry(0.28, 0.85, 0.32);
+    const handGeo = new THREE.CylinderGeometry(0.13, 0.13, 0.18, 12);
+    const pauldronGeo = new THREE.BoxGeometry(0.42, 0.32, 0.44);
+
+    // Pivô do Braço Esquerdo
+    this.heroLeftArmPivot = new THREE.Group();
+    this.heroLeftArmPivot.position.set(-0.68, 2.1, 0);
+
+    const leftArm = new THREE.Mesh(armGeo, armorCobaltMat);
+    leftArm.position.set(0, -0.45, 0);
     leftArm.castShadow = true;
-    this.heroGroup.add(leftArm);
+    this.heroLeftArmPivot.add(leftArm);
 
-    const leftHand = new THREE.Mesh(handGeo, headMat);
-    leftHand.position.set(-0.74, 1.15, 0.08);
+    // Ombreira tática esquerda acoplada ao pivô do braço
+    const leftPauldron = new THREE.Mesh(pauldronGeo, armorDarkMat);
+    leftPauldron.position.set(-0.06, 0.06, 0);
+    leftPauldron.castShadow = true;
+    this.heroLeftArmPivot.add(leftPauldron);
+
+    const leftPauldronTrim = new THREE.Mesh(
+      new THREE.BoxGeometry(0.44, 0.08, 0.46),
+      armorGoldMat,
+    );
+    leftPauldronTrim.position.set(-0.06, 0.16, 0);
+    this.heroLeftArmPivot.add(leftPauldronTrim);
+
+    const leftHand = new THREE.Mesh(handGeo, armorDarkMat);
+    leftHand.position.set(0, -0.9, 0.08);
     leftHand.rotation.x = Math.PI / 2;
     leftHand.castShadow = true;
-    this.heroGroup.add(leftHand);
+    this.heroLeftArmPivot.add(leftHand);
+    this.heroGroup.add(this.heroLeftArmPivot);
 
-    const rightArm = new THREE.Mesh(armGeo, torsoMat);
-    rightArm.position.set(0.68, 1.65, 0.05);
-    rightArm.rotation.z = -0.12;
-    rightArm.rotation.x = -0.2;
+    // Pivô do Braço Direito com Socket de Arma
+    this.heroRightArmPivot = new THREE.Group();
+    this.heroRightArmPivot.position.set(0.68, 2.1, 0);
+
+    const rightArm = new THREE.Mesh(armGeo, armorCobaltMat);
+    rightArm.position.set(0, -0.45, 0);
     rightArm.castShadow = true;
-    this.heroGroup.add(rightArm);
+    this.heroRightArmPivot.add(rightArm);
 
-    const rightHand = new THREE.Mesh(handGeo, headMat);
-    rightHand.position.set(0.74, 1.15, 0.22);
+    // Ombreira tática direita acoplada ao pivô do braço
+    const rightPauldron = new THREE.Mesh(pauldronGeo, armorDarkMat);
+    rightPauldron.position.set(0.06, 0.06, 0);
+    rightPauldron.castShadow = true;
+    this.heroRightArmPivot.add(rightPauldron);
+
+    const rightPauldronTrim = new THREE.Mesh(
+      new THREE.BoxGeometry(0.44, 0.08, 0.46),
+      armorGoldMat,
+    );
+    rightPauldronTrim.position.set(0.06, 0.16, 0);
+    this.heroRightArmPivot.add(rightPauldronTrim);
+
+    const rightHand = new THREE.Mesh(handGeo, armorDarkMat);
+    rightHand.position.set(0, -0.9, 0.08);
     rightHand.rotation.x = Math.PI / 2;
     rightHand.castShadow = true;
-    this.heroGroup.add(rightHand);
+    this.heroRightArmPivot.add(rightHand);
 
-    const backpackGeo = new THREE.BoxGeometry(0.7, 0.75, 0.35);
-    const backpack = new THREE.Mesh(backpackGeo, backpackMat);
+    // Socket de acoplamento de armas na mão direita
+    this.rightHandWeaponSocket = new THREE.Group();
+    this.rightHandWeaponSocket.position.set(0, -0.9, 0.2);
+    this.heroRightArmPivot.add(this.rightHandWeaponSocket);
+    this.heroGroup.add(this.heroRightArmPivot);
+
+    // 7. Jetpack com Turbinas Gêmeas e Cones de Plasma (Twin-Thruster Backpack)
+    const backpackGeo = new THREE.BoxGeometry(0.78, 0.85, 0.32);
+    const backpack = new THREE.Mesh(backpackGeo, armorDarkMat);
     backpack.position.set(0, 1.65, -0.42);
     backpack.castShadow = true;
     this.heroGroup.add(backpack);
 
-    const coreGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.45, 12);
-    const core = new THREE.Mesh(coreGeo, energyCoreMat);
-    core.position.set(0, 1.65, -0.6);
-    this.heroGroup.add(core);
+    const thrusterGeo = new THREE.CylinderGeometry(0.12, 0.15, 0.65, 16);
+    const nozzleGeo = new THREE.CylinderGeometry(0.16, 0.13, 0.12, 16);
+    const plasmaConeGeo = new THREE.ConeGeometry(0.11, 0.35, 12);
+
+    // Turbina Esquerda
+    const leftThruster = new THREE.Mesh(thrusterGeo, armorCobaltMat);
+    leftThruster.position.set(-0.28, 1.65, -0.54);
+    leftThruster.castShadow = true;
+    this.heroGroup.add(leftThruster);
+
+    const leftNozzle = new THREE.Mesh(nozzleGeo, armorGoldMat);
+    leftNozzle.position.set(-0.28, 1.28, -0.54);
+    this.heroGroup.add(leftNozzle);
+
+    const leftPlasma = new THREE.Mesh(plasmaConeGeo, thrusterPlasmaMat);
+    leftPlasma.rotation.x = Math.PI;
+    leftPlasma.position.set(-0.28, 1.05, -0.54);
+    this.heroGroup.add(leftPlasma);
+
+    // Turbina Direita
+    const rightThruster = new THREE.Mesh(thrusterGeo, armorCobaltMat);
+    rightThruster.position.set(0.28, 1.65, -0.54);
+    rightThruster.castShadow = true;
+    this.heroGroup.add(rightThruster);
+
+    const rightNozzle = new THREE.Mesh(nozzleGeo, armorGoldMat);
+    rightNozzle.position.set(0.28, 1.28, -0.54);
+    this.heroGroup.add(rightNozzle);
+
+    const rightPlasma = new THREE.Mesh(plasmaConeGeo, thrusterPlasmaMat);
+    rightPlasma.rotation.x = Math.PI;
+    rightPlasma.position.set(0.28, 1.05, -0.54);
+    this.heroGroup.add(rightPlasma);
+
+    // Acopla a arma equipada inicial na mão
+    this.updateHandWeaponVisual(this.world.getEquippedWeapon());
 
     this.scene.add(this.heroGroup);
+  }
+
+  /**
+   * Atualiza a malha 3D da arma visível empunhada na mão direita do herói.
+   */
+  public updateHandWeaponVisual(weaponType: WeaponType): void {
+    if (!this.rightHandWeaponSocket) return;
+
+    if (this.currentWeaponMeshInHand) {
+      this.rightHandWeaponSocket.remove(this.currentWeaponMeshInHand);
+      this.disposeObject3D(this.currentWeaponMeshInHand);
+      this.currentWeaponMeshInHand = null;
+    }
+
+    const weaponMesh = this.createHandWeaponMesh(weaponType);
+    this.rightHandWeaponSocket.add(weaponMesh);
+    this.currentWeaponMeshInHand = weaponMesh;
+  }
+
+  /**
+   * Cria o modelo 3D em blocos da arma empunhada na mão do herói.
+   */
+  private createHandWeaponMesh(weaponType: WeaponType): THREE.Object3D {
+    const group = new THREE.Group();
+
+    if (weaponType === 'stud_blaster') {
+      // Punho
+      const gripGeo = new THREE.BoxGeometry(0.08, 0.22, 0.1);
+      const gripMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.5 });
+      const grip = new THREE.Mesh(gripGeo, gripMat);
+      grip.position.set(0, -0.06, 0);
+      group.add(grip);
+
+      // Corpo Amarelo LEGO
+      const bodyGeo = new THREE.BoxGeometry(0.14, 0.16, 0.38);
+      const bodyMat = new THREE.MeshStandardMaterial({ color: 0xfcd116, roughness: 0.3, metalness: 0.2 });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.set(0, 0.05, 0.1);
+      group.add(body);
+
+      // Cano Metálico Dourado
+      const barrelGeo = new THREE.CylinderGeometry(0.055, 0.055, 0.24, 10);
+      const barrelMat = new THREE.MeshStandardMaterial({
+        color: 0xf59e0b,
+        emissive: 0xd97706,
+        emissiveIntensity: 0.6,
+        metalness: 0.8,
+      });
+      const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.set(0, 0.05, 0.34);
+      group.add(barrel);
+
+      // Stud luminoso frontal
+      const tipGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.06, 8);
+      const tipMat = new THREE.MeshStandardMaterial({
+        color: 0xfef08a,
+        emissive: 0xfef08a,
+        emissiveIntensity: 1.6,
+      });
+      const tip = new THREE.Mesh(tipGeo, tipMat);
+      tip.rotation.x = Math.PI / 2;
+      tip.position.set(0, 0.05, 0.48);
+      group.add(tip);
+    } else if (weaponType === 'scatter_shot') {
+      // Punho e coronha
+      const stockGeo = new THREE.BoxGeometry(0.1, 0.22, 0.2);
+      const stockMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.6 });
+      const stock = new THREE.Mesh(stockGeo, stockMat);
+      stock.position.set(0, -0.04, -0.05);
+      group.add(stock);
+
+      // Câmara Robusta
+      const chamberGeo = new THREE.BoxGeometry(0.2, 0.2, 0.42);
+      const chamberMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3, metalness: 0.3 });
+      const chamber = new THREE.Mesh(chamberGeo, chamberMat);
+      chamber.position.set(0, 0.06, 0.15);
+      group.add(chamber);
+
+      // 3 Canos Frontais Curtos
+      const pipeGeo = new THREE.CylinderGeometry(0.038, 0.038, 0.22, 8);
+      const pipeMat = new THREE.MeshStandardMaterial({
+        color: 0x38bdf8,
+        emissive: 0x0284c7,
+        emissiveIntensity: 1.0,
+      });
+
+      const pipe1 = new THREE.Mesh(pipeGeo, pipeMat);
+      pipe1.rotation.x = Math.PI / 2;
+      pipe1.position.set(-0.06, 0.06, 0.42);
+      group.add(pipe1);
+
+      const pipe2 = new THREE.Mesh(pipeGeo, pipeMat);
+      pipe2.rotation.x = Math.PI / 2;
+      pipe2.position.set(0.06, 0.06, 0.42);
+      group.add(pipe2);
+
+      const pipe3 = new THREE.Mesh(pipeGeo, pipeMat);
+      pipe3.rotation.x = Math.PI / 2;
+      pipe3.position.set(0, 0.12, 0.42);
+      group.add(pipe3);
+    } else if (weaponType === 'spring_mine') {
+      // Disco da mina empunhada na mão
+      const discGeo = new THREE.CylinderGeometry(0.22, 0.24, 0.08, 14);
+      const discMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.7 });
+      const disc = new THREE.Mesh(discGeo, discMat);
+      disc.rotation.x = Math.PI / 4;
+      disc.position.set(0, 0.04, 0.15);
+      group.add(disc);
+
+      // Sensor central vermelho pulsante
+      const sensorGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.1, 10);
+      const sensorMat = new THREE.MeshStandardMaterial({
+        color: 0xef4444,
+        emissive: 0xdc2626,
+        emissiveIntensity: 2.2,
+      });
+      const sensor = new THREE.Mesh(sensorGeo, sensorMat);
+      sensor.rotation.x = Math.PI / 4;
+      sensor.position.set(0, 0.08, 0.18);
+      group.add(sensor);
+    }
+
+    return group;
+  }
+
+  /**
+   * Executa animações procedurais fluidas a 60 FPS nos membros articulados do herói.
+   */
+  private animateHeroProcedural(delta: number, time: number): void {
+    if (
+      !this.heroLeftLegPivot ||
+      !this.heroRightLegPivot ||
+      !this.heroLeftArmPivot ||
+      !this.heroRightArmPivot
+    ) {
+      return;
+    }
+
+    const isDriving = this.world.isDriving();
+    const heroController = this.world.heroController;
+    const hero = this.world.heroTransform;
+
+    if (isDriving) {
+      // Postura de Pilotagem no Cockpit do Buggy
+      this.heroLeftLegPivot.rotation.x = -Math.PI / 2.3;
+      this.heroRightLegPivot.rotation.x = -Math.PI / 2.3;
+      this.heroLeftLegPivot.rotation.z = 0.05;
+      this.heroRightLegPivot.rotation.z = -0.05;
+
+      this.heroLeftArmPivot.rotation.x = -Math.PI / 3.2;
+      this.heroLeftArmPivot.rotation.z = 0.25;
+      this.heroRightArmPivot.rotation.x = -Math.PI / 3.2;
+      this.heroRightArmPivot.rotation.z = -0.25;
+
+      if (this.rightHandWeaponSocket) {
+        this.rightHandWeaponSocket.visible = false;
+      }
+      return;
+    }
+
+    // A pé: arma visível
+    if (this.rightHandWeaponSocket) {
+      this.rightHandWeaponSocket.visible = true;
+    }
+
+    // 1. Tratamento do Recuo de Tiro (Recoil)
+    let isRecoilActive = false;
+    if (this.shootRecoilTimer > 0) {
+      this.shootRecoilTimer = Math.max(0, this.shootRecoilTimer - delta);
+      isRecoilActive = true;
+      const progress = this.shootRecoilTimer / 0.22; // 1 -> 0
+
+      // Braço direito sobe mirando e recua com coice
+      this.heroRightArmPivot.rotation.x = -Math.PI / 2.05 + progress * 0.42;
+      this.heroRightArmPivot.rotation.y = 0.12;
+      this.heroRightArmPivot.rotation.z = -0.05;
+    }
+
+    // 2. Animação de Pulo / Queda
+    const isGrounded = hero.y <= 0.01 && (heroController.isGrounded ?? true);
+    if (!isGrounded) {
+      // Pernas dobram levemente para trás
+      this.heroLeftLegPivot.rotation.x = -0.4;
+      this.heroRightLegPivot.rotation.x = -0.28;
+      this.heroLeftLegPivot.rotation.z = 0.06;
+      this.heroRightLegPivot.rotation.z = -0.06;
+
+      // Braço esquerdo abre em equilíbrio
+      this.heroLeftArmPivot.rotation.z = 0.45;
+      this.heroLeftArmPivot.rotation.x = -0.25;
+
+      if (!isRecoilActive) {
+        this.heroRightArmPivot.rotation.z = -0.45;
+        this.heroRightArmPivot.rotation.x = -0.25;
+        this.heroRightArmPivot.rotation.y = 0;
+      }
+      return;
+    }
+
+    // 3. Animação de Corrida / Andar no Solo (Walk Cycle)
+    if (heroController.isMoving) {
+      const walkFreq = 12.0;
+      const legSwing = Math.sin(time * walkFreq) * 0.65;
+
+      this.heroLeftLegPivot.rotation.x = legSwing;
+      this.heroRightLegPivot.rotation.x = -legSwing;
+      this.heroLeftLegPivot.rotation.z = 0;
+      this.heroRightLegPivot.rotation.z = 0;
+
+      this.heroLeftArmPivot.rotation.x = -legSwing * 0.75;
+      this.heroLeftArmPivot.rotation.z = 0.12;
+
+      if (!isRecoilActive) {
+        this.heroRightArmPivot.rotation.x = legSwing * 0.75;
+        this.heroRightArmPivot.rotation.y = 0;
+        this.heroRightArmPivot.rotation.z = -0.12;
+      }
+      return;
+    }
+
+    // 4. Parado no Solo (Idle) - Postura ereta firme e respiração suave
+    const idleLerp = Math.min(1, delta * 10.0);
+    this.heroLeftLegPivot.rotation.x += (0 - this.heroLeftLegPivot.rotation.x) * idleLerp;
+    this.heroRightLegPivot.rotation.x += (0 - this.heroRightLegPivot.rotation.x) * idleLerp;
+    this.heroLeftLegPivot.rotation.z = 0;
+    this.heroRightLegPivot.rotation.z = 0;
+
+    const breathe = Math.sin(time * 3.0) * 0.04;
+    this.heroLeftArmPivot.rotation.x += (0 - this.heroLeftArmPivot.rotation.x) * idleLerp;
+    this.heroLeftArmPivot.rotation.z = 0.12 + breathe;
+
+    if (!isRecoilActive) {
+      this.heroRightArmPivot.rotation.x += (0 - this.heroRightArmPivot.rotation.x) * idleLerp;
+      this.heroRightArmPivot.rotation.y += (0 - this.heroRightArmPivot.rotation.y) * idleLerp;
+      this.heroRightArmPivot.rotation.z = -0.12 - breathe;
+    }
   }
 
   /**
@@ -655,14 +1100,55 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   public equipWeapon(type: WeaponType): void {
     this.world.setEquippedWeapon(type);
     this.equippedWeapon.set(type);
+    this.updateHandWeaponVisual(type);
   }
 
   /**
-   * Dispara a arma atual do jogador com predição imediata no cliente e emissão de rede.
+   * Dispara a arma atual do jogador orientada pelo ponto 3D apontado pelo mouse na arena.
    */
   public handleShoot(): void {
-    const shootResult = this.world.shootCurrentWeapon();
+    const isDriving = this.world.isDriving();
+    const origin: Vector3D = isDriving
+      ? {
+          x: this.world.vehicleTransform.x,
+          y: this.world.vehicleTransform.y + 0.6,
+          z: this.world.vehicleTransform.z,
+        }
+      : {
+          x: this.world.heroTransform.x,
+          y: this.world.heroTransform.y + 1.2,
+          z: this.world.heroTransform.z,
+        };
+
+    const dx = this.aimTarget3D.x - origin.x;
+    const dz = this.aimTarget3D.z - origin.z;
+    const dist = Math.hypot(dx, dz);
+
+    let direction: Vector3D;
+    if (dist > 0.05) {
+      direction = { x: dx / dist, y: 0, z: dz / dist };
+    } else {
+      const angle = isDriving
+        ? this.world.vehicleTransform.rotationY
+        : this.world.heroTransform.rotationY;
+      direction = { x: Math.sin(angle), y: 0, z: Math.cos(angle) };
+    }
+
+    // Quando a pé, gira o corpo na direção da mira estilo Twin-Stick Shooter
+    if (!isDriving && dist > 0.05) {
+      const aimAngle = Math.atan2(dx, dz);
+      this.world.heroTransform.rotationY = aimAngle;
+      if (this.heroGroup) {
+        this.heroGroup.rotation.y = aimAngle;
+      }
+    }
+
+    const shootResult = this.world.shootCurrentWeapon(origin, direction);
     if (shootResult.success) {
+      this.shootRecoilTimer = 0.22;
+      this.isShootingRecoil.set(true);
+      window.setTimeout(() => this.isShootingRecoil.set(false), 120);
+
       if (this.networkService.isConnected()) {
         this.networkService.shoot(
           shootResult.weaponType,
@@ -1170,14 +1656,65 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
   }
 
   private onPointerMove(event: PointerEvent): void {
-    if (!this.isDragging) return;
+    // 1. Atualiza coordenadas 2D da mira na tela
+    const container = this.containerRef?.nativeElement;
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      this.crosshairX.set(event.clientX - rect.left);
+      this.crosshairY.set(event.clientY - rect.top);
+    } else {
+      this.crosshairX.set(event.clientX);
+      this.crosshairY.set(event.clientY);
+    }
+
+    // 2. Raycasting 3D no plano horizontal da arena (Y = 0)
+    const canvas = this.canvasRef?.nativeElement;
+    if (canvas && this.camera) {
+      const rect = canvas.getBoundingClientRect();
+      const width = rect.width || window.innerWidth || 800;
+      const height = rect.height || window.innerHeight || 600;
+
+      this.mouseNDC.x = ((event.clientX - rect.left) / width) * 2 - 1;
+      this.mouseNDC.y = -((event.clientY - rect.top) / height) * 2 + 1;
+
+      this.raycaster.setFromCamera(this.mouseNDC, this.camera);
+      const hitPoint = new THREE.Vector3();
+      if (this.raycaster.ray.intersectPlane(this.groundPlane, hitPoint)) {
+        this.aimTarget3D.copy(hitPoint);
+
+        // Se a pé e não estiver esterçando via teclado (A/D), orienta na direção do mouse
+        const isUsingSteer = Boolean(this.world.inputState.left || this.world.inputState.right);
+        if (!this.world.isDriving() && !isUsingSteer) {
+          const dx = hitPoint.x - this.world.heroTransform.x;
+          const dz = hitPoint.z - this.world.heroTransform.z;
+          if (Math.hypot(dx, dz) > 0.15) {
+            this.world.heroTransform.rotationY = Math.atan2(dx, dz);
+            if (this.heroGroup) {
+              this.heroGroup.rotation.y = this.world.heroTransform.rotationY;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Rotação orbital suave da câmera
+    if (this.previousPointerX === 0 && this.previousPointerY === 0) {
+      this.previousPointerX = event.clientX;
+      this.previousPointerY = event.clientY;
+      return;
+    }
 
     const deltaX = event.clientX - this.previousPointerX;
     const deltaY = event.clientY - this.previousPointerY;
     this.previousPointerX = event.clientX;
     this.previousPointerY = event.clientY;
 
-    const rotationSpeed = 0.007;
+    if (Math.abs(deltaX) > 120 || Math.abs(deltaY) > 120) {
+      return;
+    }
+
+    this.userManualCameraRotation = true;
+    const rotationSpeed = 0.005;
     this.targetTheta -= deltaX * rotationSpeed;
     this.targetPhi = Math.max(0.2, Math.min(Math.PI / 2 - 0.08, this.targetPhi + deltaY * rotationSpeed));
     this.idleTime = 0;
@@ -1242,6 +1779,16 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
       this.world.enqueuePendingInput(seq, this.world.inputState, delta);
     }
 
+    // Se a pé e não estiver esterçando pelo teclado (A/D), orienta para o mouse para que avançar (W) siga o cursor
+    const isUsingSteerKeys = Boolean(this.world.inputState.left || this.world.inputState.right);
+    if (!this.world.isDriving() && !isUsingSteerKeys) {
+      const dx = this.aimTarget3D.x - this.world.heroTransform.x;
+      const dz = this.aimTarget3D.z - this.world.heroTransform.z;
+      if (Math.hypot(dx, dz) > 0.15) {
+        this.world.heroTransform.rotationY = Math.atan2(dx, dz);
+      }
+    }
+
     // 1. Avança a simulação determinística do GameWorld
     this.world.step(delta);
 
@@ -1264,10 +1811,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
         if (hero.y <= 0.01) {
           if (this.world.heroController.isMoving) {
             // Animação de corrida (balanço heróico no solo)
-            visualY += Math.abs(Math.sin(time * 12.0)) * 0.1;
-          } else {
-            // Respiração suave no solo
-            visualY += Math.sin(time * 3.0) * 0.03;
+            visualY += Math.abs(Math.sin(time * 12.0)) * 0.06;
           }
         }
 
@@ -1275,6 +1819,9 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
         this.heroGroup.rotation.y = hero.rotationY;
         this.heroGroup.scale.set(1.0, 1.0, 1.0);
       }
+
+      // Animações procedurais dos membros articulados (andar, pular, atirar, pilotar)
+      this.animateHeroProcedural(delta, time);
     }
 
     if (this.vehicleGroup) {
@@ -1311,18 +1858,16 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     this.lookAtY += (targetLookAtY - this.lookAtY) * lerpFactor;
     this.lookAtZ += (targetLookAtZ - this.lookAtZ) * lerpFactor;
 
-    if (!this.isDragging) {
-      this.idleTime += delta;
+    this.idleTime += delta;
 
-      // Alinha suavemente a câmera com a traseira do veículo ou costas do herói
-      const activeRotation = isDriving ? vehicle.rotationY : hero.rotationY;
-      const behindEntityTheta = activeRotation + Math.PI;
-      let thetaDiff = (behindEntityTheta - this.targetTheta) % (Math.PI * 2);
+    // Alinhamento suave da câmera apenas quando dirigindo em velocidade e sem movimento manual recente
+    if (isDriving && Math.abs(vehicleComp.currentSpeed) > 1.5 && this.idleTime > 2.5) {
+      const behindVehicleTheta = vehicle.rotationY + Math.PI;
+      let thetaDiff = (behindVehicleTheta - this.targetTheta) % (Math.PI * 2);
       if (thetaDiff > Math.PI) thetaDiff -= Math.PI * 2;
       if (thetaDiff < -Math.PI) thetaDiff += Math.PI * 2;
 
-      const alignSpeed = isDriving ? 3.8 : 4.8;
-      this.targetTheta += thetaDiff * Math.min(1, delta * alignSpeed);
+      this.targetTheta += thetaDiff * Math.min(1, delta * 2.2);
     }
 
     this.currentTheta += (this.targetTheta - this.currentTheta) * lerpFactor;
@@ -1488,7 +2033,7 @@ export class GameViewportComponent implements AfterViewInit, OnDestroy {
     for (const mesh of this.debrisMeshes.values()) {
       mesh.geometry.dispose();
       if (Array.isArray(mesh.material)) {
-        mesh.material.forEach((mat) => mat.dispose());
+        mesh.material.forEach((mat: THREE.Material) => mat.dispose());
       } else if (mesh.material) {
         mesh.material.dispose();
       }

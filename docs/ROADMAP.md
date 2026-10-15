@@ -13,8 +13,8 @@ Este documento descreve o plano de desenvolvimento do **Brick Survivors: Overdri
 | **Fase 3** | Movimentação, Física Arcade e Controle de Veículos | **Concluída** | Especialista Front-End & Game Architecture |
 | **Fase 4** | Sistema Modular de Blocos e Destruição Estilo Lego | **Concluída** | Especialista Front-End & Game Architecture |
 | **Fase 5** | Netcode Autoritativo (NestJS Socket.IO, Predição & Reconciliação) | **Concluída** | Especialista Back-End, Front-End & Netcode |
-| **Fase 6** | Sistema de Combate, Armas Fictícias e Object Pooling | **Próxima (Pronta para Iniciar)** | Especialista de Game Architecture |
-| **Fase 7** | Modos de Jogo (Sobrevivência Co-op & Combate PvP) | Planejada | Time Integrado |
+| **Fase 6** | Sistema de Combate, Armas Fictícias e Object Pooling | **Concluída** | Especialista Back-End, Front-End & Game Architecture |
+| **Fase 7** | Modos de Jogo (Sobrevivência Co-op & Combate PvP) | **Próxima (Pronta para Iniciar)** | Time Integrado |
 | **Fase 8** | HUD/UI, Áudio Espacial, Otimizações Finais e Deploy | Planejada | Time Integrado / QA |
 
 ---
@@ -70,11 +70,15 @@ Este documento descreve o plano de desenvolvimento do **Brick Survivors: Overdri
 - [x] Indicador de status de conexão no HUD (🟢 ONLINE / 🔴 OFFLINE) e medidor de RTT/ping em tempo real.
 - [x] 106 testes automatizados aprovados (27 no backend e 79 no frontend) e builds de produção limpos.
 
-### Fase 6: Sistema de Combate, Armas Fictícias e Object Pooling
-- [ ] Arsenal fictício arcade (lançador de pinos, raio desintegrador de blocos, minas de mola).
-- [ ] Broad-Phase de colisão com Spatial Hash Grid para escala performática de entidades.
-- [ ] Narrow-Phase de detecção de colisão raio/projétil contra blocos de veículos e inimigos.
-- [ ] `ObjectPool` para projéteis, lasers e textos de dano flutuante (floating combat text), eliminando GC spikes.
+### Fase 6: Sistema de Combate, Armas Fictícias e Object Pooling (CONCLUÍDA)
+- [x] Arsenal fictício arcade com 3 armas: Stud Blaster (tiro linear rápido), Block Scatter Shot (dispersão em cone de 5 projéteis) e Spring Mine (mina com detonação de proximidade e knockback).
+- [x] Broad-Phase de colisão com Spatial Hash Grid matemático em células de 8.0m ($O(1)$ médio) no backend e frontend.
+- [x] Narrow-Phase de detecção de colisão raio/esfera contra blocos de veículos e pedestres com ejeção modular de peças.
+- [x] Motor de combate autoritativo com `CombatService` no NestJS (anti-cheat com validação de cooldowns, trajectory tick e broadcast de danos e projéteis).
+- [x] `ObjectPool` para projéteis e Floating Combat Text (danos flutuantes projetados da cena 3D para o HUD com animação e fade-out).
+- [x] Controles de disparo ([J] ou Botão Esquerdo do Mouse), troca de armas ([1], [2], [3]) e card de arma equipada com barra de cooldown dinâmica.
+- [x] 146 testes unitários automatizados aprovados (49 no backend e 97 no frontend) com 100% de sucesso.
+- [x] Builds de produção limpos e conformidade total de tipagem estrita e separação de interfaces.
 
 ### Fase 7: Modos de Jogo (Sobrevivência Co-op & Combate PvP)
 - [ ] Máquina de Estados Finitos (FSM) do ciclo de vida das partidas.

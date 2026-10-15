@@ -22,17 +22,17 @@
   <!-- Top Left: Brand & Status -->
   <div class="hud-top-left" aria-hidden="true">
     <div class="badge-brand">
-      <span class="stud-dot"></span>
+      <iconify-icon icon="mdi:toy-brick" class="stud-dot"></iconify-icon>
       <span>Brick Survivors: Overdrive</span>
     </div>
 
-    <!-- Badge de Rede Multiplayer -->
+    <!-- Badge de Rede Multiplayer com Iconify -->
     <div
       class="badge-network"
       [class.network-online]="networkService.isConnected()"
       [class.network-offline]="!networkService.isConnected()"
     >
-      <span class="network-dot"></span>
+      <iconify-icon [icon]="networkService.isConnected() ? 'mdi:wifi' : 'mdi:wifi-off'" class="network-dot-icon"></iconify-icon>
       <span class="network-status">{{ networkService.isConnected() ? 'ONLINE' : 'OFFLINE' }}</span>
       @if (networkService.isConnected()) {
         <span class="network-ping">{{ networkService.pingMs() }} ms</span>
@@ -40,15 +40,16 @@
     </div>
 
     <div class="mode-badge" [class.mode-driving]="isDriving()">
-      <span class="mode-icon">{{ isDriving() ? '🏎️' : '🚶' }}</span>
+      <iconify-icon [icon]="isDriving() ? 'mdi:car-sports' : 'mdi:walk'" class="mode-icon"></iconify-icon>
       <span class="mode-text">{{ isDriving() ? 'PILOTANDO BUGGY' : 'A PÉ (HERÓI)' }}</span>
     </div>
   </div>
 
-  <!-- Top Right: Speedometer & Drift Alert -->
+  <!-- Top Right: Speedometer & Drift Alert com Iconify -->
   <div class="hud-top-right" aria-hidden="true">
     <div class="speedometer-card">
       <div class="speed-value">
+        <iconify-icon icon="mdi:speedometer" class="hud-stat-icon"></iconify-icon>
         <span class="speed-number">{{ speedKmh() }}</span>
         <span class="speed-unit">KM/H</span>
       </div>
@@ -61,7 +62,7 @@
       <!-- Card de Integridade da Blindagem (Blocos LEGO) -->
       <div class="durability-card" [class.durability-low]="durabilityPercentage() < 35" [class.durability-mid]="durabilityPercentage() < 70 && durabilityPercentage() >= 35">
         <div class="durability-header">
-          <span class="durability-icon">🛡️</span>
+          <iconify-icon icon="mdi:shield-car" class="durability-icon"></iconify-icon>
           <span class="durability-title">BLINDAGEM</span>
           <span class="durability-val">{{ durabilityPercentage() }}%</span>
         </div>
@@ -73,10 +74,28 @@
 
     @if (isDrifting()) {
       <div class="badge-drift">
-        <span class="drift-flame">🔥</span>
+        <iconify-icon icon="mdi:fire" class="drift-flame"></iconify-icon>
         <span>DRIFT OVERDRIVE!</span>
       </div>
     }
+  </div>
+
+  <!-- Crosshair Reticle (Mira Dinâmica no Mouse) -->
+  <div
+    class="crosshair-container"
+    [class.crosshair-firing]="isShootingRecoil()"
+    [class.crosshair-driving]="isDriving()"
+    [attr.data-weapon]="equippedWeapon()"
+    [style.left.px]="crosshairX()"
+    [style.top.px]="crosshairY()"
+    aria-hidden="true"
+  >
+    <div class="crosshair-dot"></div>
+    <div class="crosshair-line crosshair-top"></div>
+    <div class="crosshair-line crosshair-bottom"></div>
+    <div class="crosshair-line crosshair-left"></div>
+    <div class="crosshair-line crosshair-right"></div>
+    <div class="crosshair-ring"></div>
   </div>
 
   <!-- Center Action Prompt (Interação E) -->
@@ -84,26 +103,34 @@
     @if (!isDriving() && canInteract()) {
       <div class="prompt-interact">
         <kbd class="key-hint">E</kbd>
+        <iconify-icon icon="mdi:car-key" class="prompt-icon"></iconify-icon>
         <span class="prompt-label">Dirigir Buggy de Blocos</span>
       </div>
     } @else if (isDriving() && canDismount()) {
       <div class="prompt-dismount">
         <kbd class="key-hint">E</kbd>
+        <iconify-icon icon="mdi:car-door" class="prompt-icon"></iconify-icon>
         <span class="prompt-label">Desembarcar do Veículo</span>
       </div>
     }
   </div>
 
-  <!-- Bottom Left: Weapon Card -->
+  <!-- Bottom Left: Weapon Card com Iconify -->
   <div class="hud-weapon-card" aria-label="Arma Equipada">
     <div class="weapon-header">
-      <span class="weapon-icon">
+      <div class="weapon-icon">
         @switch (equippedWeapon()) {
-          @case ('stud_blaster') { 🟡 }
-          @case ('scatter_shot') { 🟦 }
-          @case ('spring_mine') { 💣 }
+          @case ('stud_blaster') {
+            <iconify-icon icon="mdi:pistol" class="weapon-active-icon color-blaster"></iconify-icon>
+          }
+          @case ('scatter_shot') {
+            <iconify-icon icon="mdi:scatter-plot" class="weapon-active-icon color-scatter"></iconify-icon>
+          }
+          @case ('spring_mine') {
+            <iconify-icon icon="mdi:disc" class="weapon-active-icon color-mine"></iconify-icon>
+          }
         }
-      </span>
+      </div>
       <div class="weapon-info">
         <span class="weapon-title">ARMA EQUIPADA</span>
         <span class="weapon-name">{{ equippedWeaponName() }}</span>
@@ -126,7 +153,9 @@
         [class.active]="equippedWeapon() === 'stud_blaster'"
         (click)="equipWeapon('stud_blaster')"
       >
-        <kbd>[1]</kbd> Blaster
+        <kbd>[1]</kbd>
+        <iconify-icon icon="mdi:pistol"></iconify-icon>
+        <span>Blaster</span>
       </button>
       <button
         type="button"
@@ -134,7 +163,9 @@
         [class.active]="equippedWeapon() === 'scatter_shot'"
         (click)="equipWeapon('scatter_shot')"
       >
-        <kbd>[2]</kbd> Scatter
+        <kbd>[2]</kbd>
+        <iconify-icon icon="mdi:scatter-plot"></iconify-icon>
+        <span>Scatter</span>
       </button>
       <button
         type="button"
@@ -142,15 +173,18 @@
         [class.active]="equippedWeapon() === 'spring_mine'"
         (click)="equipWeapon('spring_mine')"
       >
-        <kbd>[3]</kbd> Mina
+        <kbd>[3]</kbd>
+        <iconify-icon icon="mdi:disc"></iconify-icon>
+        <span>Mina</span>
       </button>
     </div>
   </div>
 
-  <!-- Bottom: Controls Help -->
+  <!-- Bottom: Controls Help com Iconify -->
   <div class="instructions-panel" aria-hidden="true">
     <div class="instruction-item">
       <kbd>W A S D</kbd>
+      <iconify-icon icon="mdi:keyboard" class="instruction-icon"></iconify-icon>
       <span>{{ isDriving() ? 'Acelerar / Ré / Curva' : 'Movimento do Herói' }}</span>
     </div>
     <div class="instruction-item">
@@ -159,6 +193,7 @@
     </div>
     <div class="instruction-item">
       <kbd>J / Clique</kbd>
+      <iconify-icon icon="mdi:mouse-left-click" class="instruction-icon"></iconify-icon>
       <span>Disparar</span>
     </div>
     <div class="instruction-item">
@@ -168,11 +203,13 @@
     @if (isDriving() && canDismount()) {
       <div class="instruction-item">
         <kbd>E</kbd>
+        <iconify-icon icon="mdi:car-door" class="instruction-icon"></iconify-icon>
         <span>Desembarcar</span>
       </div>
     } @else if (!isDriving() && canInteract()) {
       <div class="instruction-item">
         <kbd>E</kbd>
+        <iconify-icon icon="mdi:car-key" class="instruction-icon"></iconify-icon>
         <span>Entrar</span>
       </div>
     }

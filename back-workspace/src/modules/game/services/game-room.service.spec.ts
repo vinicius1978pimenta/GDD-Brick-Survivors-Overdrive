@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlayerInputDto } from '../dto/player-input.dto.js';
 import { WorldStateSnapshotDto } from '../dto/world-state-snapshot.dto.js';
-import { ARENA_BOUNDS, SIMULATION_CONFIG } from '../interfaces/index.js';
+import {
+  ARENA_BOUNDS,
+  HERO_COLLISION_CONFIG,
+  SIMULATION_CONFIG,
+  VEHICLE_COLLISION_CONFIG,
+} from '../interfaces/index.js';
 import { GameRoomService } from './game-room.service.js';
 
 describe('GameRoomService', () => {
@@ -439,6 +444,164 @@ describe('GameRoomService', () => {
 
       expect(shootResult.success).toBe(false);
       expect(shootResult.reason).toBe('Player not connected');
+    });
+  });
+
+  describe('Pedestrian vs Vehicle Solid Collision', () => {
+    it('should push pedestrian out when attempting to walk forward into the front of vehicle', () => {
+      // Vehicle is at (0, 0, 0), rotation 0. Front edge is z = +1.6, back is z = -1.6
+      const player = service.addPlayer('socket-1', 'Walker');
+      // Place player just in front of vehicle facing south (towards the car)
+      player.x = 0;
+      player.z = 2.2;
+      player.rotationY = Math.PI; // facing -Z (towards vehicle at z = 0)
+
+      // Move forward towards the car
+      service.enqueueInput('socket-1', {
+        seq: 1,
+        forward: true,
+        backward: false,
+        left: false,
+        right: false,
+        handbrake: false,
+        jump: false,
+        interact: false,
+        dt: 0.05,
+        timestamp: Date.now(),
+      });
+
+      service.stepSimulation(0.05);
+
+      // Half length is 1.6, hero radius is 0.5. Player must not penetrate past 1.6 + 0.5 = 2.1
+      expect(player.z).toBeGreaterThanOrEqual(
+        VEHICLE_COLLISION_CONFIG.halfLength + HERO_COLLISION_CONFIG.radius - 0.001,
+      );
+    });
+
+    it('should push pedestrian out when attempting to walk into the side door of vehicle', () => {
+      // Vehicle is at (0, 0, 0), halfWidth = 0.9. Right edge is x = +0.9
+      const player = service.addPlayer('socket-1', 'SideWalker');
+      player.x = 1.45;
+      player.z = 0;
+      player.rotationY = -Math.PI / 2; // facing -X (towards vehicle)
+
+      service.enqueueInput('socket-1', {
+        seq: 1,
+        forward: true,
+        backward: false,
+        left: false,
+        right: false,
+        handbrake: false,
+        jump: false,
+        interact: false,
+        dt: 0.05,
+        timestamp: Date.now(),
+      });
+
+      service.stepSimulation(0.05);
+
+      // Must be kept outside: halfWidth + heroRadius = 0.9 + 0.5 = 1.4
+      expect(player.x).toBeGreaterThanOrEqual(
+        VEHICLE_COLLISION_CONFIG.halfWidth + HERO_COLLISION_CONFIG.radius - 0.001,
+      );
+    });
+
+    it('should project pedestrian out if spawned directly inside the vehicle', () => {
+      const player = service.addPlayer('socket-1', 'InsideMan');
+      player.x = 0.2;
+      player.z = 0.2;
+
+      // When stepping simulation, player should be pushed out to the exterior
+      service.stepSimulation(0.05);
+
+      const vehicle = service.getVehicle('vehicle-alpha');
+      expect(vehicle).toBeDefined();
+      if (vehicle) {
+        // Player should now be outside the bounding box + radius
+        const dx = Math.abs(player.x - vehicle.x);
+        const dz = Math.abs(player.z - vehicle.z);
+        const outside =
+          dx >= VEHICLE_COLLISION_CONFIG.halfWidth + HERO_COLLISION_CONFIG.radius - 0.001 ||
+          dz >= VEHICLE_COLLISION_CONFIG.halfLength + HERO_COLLISION_CONFIG.radius - 0.001;
+        expect(outside).toBe(true);
+      }
+    });
+
+    it('should slide tangentially when walking diagonally against the vehicle body', () => {
+      const player = service.addPlayer('socket-1', 'Slider');
+      // Place on right side of vehicle
+      player.x = 1.42;
+      player.z = 0;
+      // Angle diagonally forward and left towards the car (-X and +Z)
+      player.rotationY = -(3 * Math.PI) / 4;
+
+      service.enqueueInput('socket-1', {
+        seq: 1,
+        forward: true,
+        backward: false,
+        left: false,
+        right: false,
+        handbrake: false,
+        jump: false,
+        interact: false,
+        dt: 0.05,
+        timestamp: Date.now(),
+      });
+
+      service.stepSimulation(0.05);
+
+      // Should maintain X boundary
+      expect(player.x).toBeGreaterThanOrEqual(
+        VEHICLE_COLLISION_CONFIG.halfWidth + HERO_COLLISION_CONFIG.radius - 0.001,
+      );
+    });
+
+    it('should not push out driver who is currently driving the vehicle', () => {
+      const player = service.addPlayer('socket-1', 'Driver');
+      player.isDriving = true;
+      player.vehicleId = 'vehicle-alpha';
+      player.x = 0;
+      player.z = 0;
+
+      const vehicle = service.getVehicle('vehicle-alpha');
+      expect(vehicle).toBeDefined();
+
+      const collided = service.resolvePedestrianVehicleCollision(player, vehicle!);
+      expect(collided).toBe(false);
+      expect(player.x).toBe(0);
+      expect(player.z).toBe(0);
+    });
+
+    it('should correctly handle rotated vehicle OBB orientation', () => {
+      const vehicle = service.getVehicle('vehicle-alpha');
+      expect(vehicle).toBeDefined();
+      // Rotate vehicle 90 degrees (Math.PI / 2)
+      // Now length (3.2m, half 1.6m) runs along X and width (1.8m, half 0.9m) runs along Z
+      vehicle!.rotationY = Math.PI / 2;
+
+      const player = service.addPlayer('socket-1', 'OBBWalker');
+      // Place player along rotated vehicle's front (now +X direction)
+      player.x = 2.15;
+      player.z = 0;
+      player.rotationY = -Math.PI / 2; // facing -X towards vehicle
+
+      service.enqueueInput('socket-1', {
+        seq: 1,
+        forward: true,
+        backward: false,
+        left: false,
+        right: false,
+        handbrake: false,
+        jump: false,
+        interact: false,
+        dt: 0.05,
+        timestamp: Date.now(),
+      });
+
+      service.stepSimulation(0.05);
+
+      // In rotated space, front is along X so halfLength (1.6) + heroRadius (0.5) = 2.1
+      expect(player.x).toBeGreaterThanOrEqual(2.1 - 0.01);
     });
   });
 });

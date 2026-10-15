@@ -66,3 +66,13 @@ export const PLAYER_CONFIG = {
   gravity: 18.0,
   maxHealth: 100,
 } as const;
+
+export const VEHICLE_COLLISION_CONFIG = {
+  halfWidth: 0.9,
+  halfLength: 1.6,
+  radius: 1.6,
+} as const;
+
+export const HERO_COLLISION_CONFIG = {
+  radius: 0.5,
+} as const;

@@ -154,3 +154,76 @@ export function updateMovementSystem(
     velocity.vz = 0;
   }
 }
+
+/**
+ * Trata a colisão sólida e push-out entre pedestre e veículo.
+ * Utiliza o retângulo orientado (OBB) do carro no plano XZ para impedir que
+ * o pedestre atravesse a lataria e permitir deslizamento suave pelas bordas.
+ */
+export function resolvePedestrianVehicleCollision(
+  heroTransform: TransformComponent,
+  heroVelocity: VelocityComponent,
+  vehicleTransform: TransformComponent,
+  heroRadius = 0.45,
+  vehicleHalfWidth = 1.15,
+  vehicleHalfLength = 1.85,
+): boolean {
+  const dx = heroTransform.x - vehicleTransform.x;
+  const dz = heroTransform.z - vehicleTransform.z;
+
+  const cosAngle = Math.cos(-vehicleTransform.rotationY);
+  const sinAngle = Math.sin(-vehicleTransform.rotationY);
+
+  // Coordenadas no referencial local orientado do veículo
+  const localX = dx * cosAngle - dz * sinAngle;
+  const localZ = dx * sinAngle + dz * cosAngle;
+
+  const thresholdX = vehicleHalfWidth + heroRadius;
+  const thresholdZ = vehicleHalfLength + heroRadius;
+
+  if (Math.abs(localX) < thresholdX && Math.abs(localZ) < thresholdZ) {
+    const overlapX = thresholdX - Math.abs(localX);
+    const overlapZ = thresholdZ - Math.abs(localZ);
+
+    let resolvedLocalX = localX;
+    let resolvedLocalZ = localZ;
+
+    // Projeta velocidade no referencial local para permitir deslizamento tangencial
+    let localVx = heroVelocity.vx * cosAngle - heroVelocity.vz * sinAngle;
+    let localVz = heroVelocity.vx * sinAngle + heroVelocity.vz * cosAngle;
+
+    if (overlapX < overlapZ) {
+      resolvedLocalX += localX >= 0 ? overlapX : -overlapX;
+      // Anula velocidade normal de penetração no eixo X local
+      if (localX >= 0 && localVx < 0) {
+        localVx = 0;
+      } else if (localX < 0 && localVx > 0) {
+        localVx = 0;
+      }
+      localVz *= 0.85; // Permite deslizar suavemente pelas laterais
+    } else {
+      resolvedLocalZ += localZ >= 0 ? overlapZ : -overlapZ;
+      // Anula velocidade normal de penetração no eixo Z local
+      if (localZ >= 0 && localVz < 0) {
+        localVz = 0;
+      } else if (localZ < 0 && localVz > 0) {
+        localVz = 0;
+      }
+      localVx *= 0.85; // Permite deslizar suavemente pela dianteira/traseira
+    }
+
+    const worldCos = Math.cos(vehicleTransform.rotationY);
+    const worldSin = Math.sin(vehicleTransform.rotationY);
+
+    heroTransform.x = vehicleTransform.x + resolvedLocalX * worldCos - resolvedLocalZ * worldSin;
+    heroTransform.z = vehicleTransform.z + resolvedLocalX * worldSin + resolvedLocalZ * worldCos;
+
+    // Converte de volta para coordenadas globais
+    heroVelocity.vx = localVx * worldCos - localVz * worldSin;
+    heroVelocity.vz = localVx * worldSin + localVz * worldCos;
+
+    return true;
+  }
+
+  return false;
+}
