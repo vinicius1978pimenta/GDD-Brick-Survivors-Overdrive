@@ -1,36 +1,110 @@
 <div #viewportContainer class="viewport-container" tabindex="0" role="region" aria-label="Visualizador da Arena 3D de Blocos">
   <canvas #renderCanvas class="render-canvas"></canvas>
 
+  <!-- Floating Combat Text Overlay -->
+  <div class="combat-text-container" aria-hidden="true">
+    @for (item of floatingTexts(); track item.id) {
+      @if (item.visible) {
+        <div
+          class="floating-combat-number"
+          [style.left.px]="item.screenX"
+          [style.top.px]="item.screenY"
+          [style.color]="item.color"
+          [style.opacity]="item.opacity"
+          [style.transform]="'translate(-50%, -50%) scale(' + item.scale + ')'"
+        >
+          {{ item.text }}
+        </div>
+      }
+    }
+  </div>
+
+  <!-- Player Overhead Tags (Nome e Barra de HP Flutuante no Mundo 3D) -->
+  <div class="overhead-tags-container" aria-hidden="true">
+    @for (tag of overheadTags(); track tag.id) {
+      @if (tag.visible) {
+        <div
+          class="player-overhead-tag"
+          [class.tag-local]="tag.isLocal"
+          [style.left.px]="tag.screenX"
+          [style.top.px]="tag.screenY"
+        >
+          <div class="overhead-name-pill">
+            @if (tag.isLocal) {
+              <iconify-icon icon="mdi:star" class="local-star-icon"></iconify-icon>
+            }
+            <span class="overhead-player-name">{{ tag.name }}</span>
+          </div>
+          <div class="overhead-hp-bar">
+            <div
+              class="overhead-hp-fill"
+              [style.width.%]="tag.healthPercent"
+              [style.background-color]="tag.color"
+            ></div>
+          </div>
+        </div>
+      }
+    }
+  </div>
+
   <!-- Top Left: Brand & Status -->
   <div class="hud-top-left" aria-hidden="true">
     <div class="badge-brand">
-      <span class="stud-dot"></span>
+      <iconify-icon icon="mdi:toy-brick" class="stud-dot"></iconify-icon>
       <span>Brick Survivors: Overdrive</span>
     </div>
 
-    <!-- Badge de Rede Multiplayer -->
+    <!-- Badge Indicador do Ciclo Dia / Noite -->
+    <div class="badge-daynight" [class.phase-night]="isNightMode()">
+      <iconify-icon [icon]="isNightMode() ? 'mdi:weather-night' : timeOfDayPhase() === 'sunset' || timeOfDayPhase() === 'sunrise' ? 'mdi:weather-sunset' : 'mdi:white-balance-sunny'"></iconify-icon>
+      <span class="daynight-text">
+        {{ isNightMode() ? 'NOITE' : timeOfDayPhase() === 'sunset' ? 'ENTARDECER' : timeOfDayPhase() === 'sunrise' ? 'AMANHECER' : 'DIA' }}
+      </span>
+    </div>
+
+    <!-- Badge de Rede Multiplayer com Iconify -->
     <div
       class="badge-network"
       [class.network-online]="networkService.isConnected()"
       [class.network-offline]="!networkService.isConnected()"
     >
-      <span class="network-dot"></span>
+      <iconify-icon [icon]="networkService.isConnected() ? 'mdi:wifi' : 'mdi:wifi-off'" class="network-dot-icon"></iconify-icon>
       <span class="network-status">{{ networkService.isConnected() ? 'ONLINE' : 'OFFLINE' }}</span>
       @if (networkService.isConnected()) {
         <span class="network-ping">{{ networkService.pingMs() }} ms</span>
       }
     </div>
 
+    <!-- Card de Vida do Personagem (HP do Piloto Local) -->
+    <div
+      class="pilot-hp-card"
+      [class.hp-low]="pilotHealth() < 25"
+      [class.hp-mid]="pilotHealth() >= 25 && pilotHealth() < 60"
+      aria-label="Pontos de Vida do Piloto"
+    >
+      <div class="hp-header">
+        <div class="hp-label-group">
+          <iconify-icon icon="mdi:heart-pulse" class="hp-icon"></iconify-icon>
+          <span class="pilot-display-name">{{ localPilotName() }}</span>
+        </div>
+        <span class="hp-numeric-val">{{ pilotHealth() }} / {{ pilotMaxHealth() }} HP</span>
+      </div>
+      <div class="hp-bar-track">
+        <div class="hp-bar-fill" [style.width.%]="(pilotHealth() / pilotMaxHealth()) * 100"></div>
+      </div>
+    </div>
+
     <div class="mode-badge" [class.mode-driving]="isDriving()">
-      <span class="mode-icon">{{ isDriving() ? '🏎️' : '🚶' }}</span>
+      <iconify-icon [icon]="isDriving() ? 'mdi:car-sports' : 'mdi:walk'" class="mode-icon"></iconify-icon>
       <span class="mode-text">{{ isDriving() ? 'PILOTANDO BUGGY' : 'A PÉ (HERÓI)' }}</span>
     </div>
   </div>
 
-  <!-- Top Right: Speedometer & Drift Alert -->
+  <!-- Top Right: Speedometer & Drift Alert com Iconify -->
   <div class="hud-top-right" aria-hidden="true">
     <div class="speedometer-card">
       <div class="speed-value">
+        <iconify-icon icon="mdi:speedometer" class="hud-stat-icon"></iconify-icon>
         <span class="speed-number">{{ speedKmh() }}</span>
         <span class="speed-unit">KM/H</span>
       </div>
@@ -43,7 +117,7 @@
       <!-- Card de Integridade da Blindagem (Blocos LEGO) -->
       <div class="durability-card" [class.durability-low]="durabilityPercentage() < 35" [class.durability-mid]="durabilityPercentage() < 70 && durabilityPercentage() >= 35">
         <div class="durability-header">
-          <span class="durability-icon">🛡️</span>
+          <iconify-icon icon="mdi:shield-car" class="durability-icon"></iconify-icon>
           <span class="durability-title">BLINDAGEM</span>
           <span class="durability-val">{{ durabilityPercentage() }}%</span>
         </div>
@@ -55,10 +129,28 @@
 
     @if (isDrifting()) {
       <div class="badge-drift">
-        <span class="drift-flame">🔥</span>
+        <iconify-icon icon="mdi:fire" class="drift-flame"></iconify-icon>
         <span>DRIFT OVERDRIVE!</span>
       </div>
     }
+  </div>
+
+  <!-- Crosshair Reticle (Mira Dinâmica no Mouse) -->
+  <div
+    class="crosshair-container"
+    [class.crosshair-firing]="isShootingRecoil()"
+    [class.crosshair-driving]="isDriving()"
+    [attr.data-weapon]="equippedWeapon()"
+    [style.left.px]="crosshairX()"
+    [style.top.px]="crosshairY()"
+    aria-hidden="true"
+  >
+    <div class="crosshair-dot"></div>
+    <div class="crosshair-line crosshair-top"></div>
+    <div class="crosshair-line crosshair-bottom"></div>
+    <div class="crosshair-line crosshair-left"></div>
+    <div class="crosshair-line crosshair-right"></div>
+    <div class="crosshair-ring"></div>
   </div>
 
   <!-- Center Action Prompt (Interação E) -->
@@ -66,40 +158,362 @@
     @if (!isDriving() && canInteract()) {
       <div class="prompt-interact">
         <kbd class="key-hint">E</kbd>
+        <iconify-icon icon="mdi:car-key" class="prompt-icon"></iconify-icon>
         <span class="prompt-label">Dirigir Buggy de Blocos</span>
       </div>
     } @else if (isDriving() && canDismount()) {
       <div class="prompt-dismount">
         <kbd class="key-hint">E</kbd>
+        <iconify-icon icon="mdi:car-door" class="prompt-icon"></iconify-icon>
         <span class="prompt-label">Desembarcar do Veículo</span>
       </div>
     }
   </div>
 
-  <!-- Bottom: Controls Help -->
+  <!-- Bottom Left: Weapon Card com Iconify -->
+  <div class="hud-weapon-card" aria-label="Arma Equipada">
+    <div class="weapon-header">
+      <div class="weapon-icon">
+        @switch (equippedWeapon()) {
+          @case ('stud_blaster') {
+            <iconify-icon icon="mdi:pistol" class="weapon-active-icon color-blaster"></iconify-icon>
+          }
+          @case ('scatter_shot') {
+            <iconify-icon icon="mdi:scatter-plot" class="weapon-active-icon color-scatter"></iconify-icon>
+          }
+          @case ('spring_mine') {
+            <iconify-icon icon="mdi:disc" class="weapon-active-icon color-mine"></iconify-icon>
+          }
+        }
+      </div>
+      <div class="weapon-info">
+        <span class="weapon-title">ARMA EQUIPADA</span>
+        <span class="weapon-name">{{ equippedWeaponName() }}</span>
+      </div>
+    </div>
+
+    <!-- Barra de Cooldown -->
+    <div class="weapon-cooldown-bar">
+      <div
+        class="weapon-cooldown-fill"
+        [style.width.%]="weaponCooldownProgress()"
+        [class.cooldown-active]="weaponCooldownProgress() > 0"
+      ></div>
+    </div>
+
+    <div class="weapon-hotkeys">
+      <button
+        type="button"
+        class="weapon-btn"
+        [class.active]="equippedWeapon() === 'stud_blaster'"
+        (click)="equipWeapon('stud_blaster')"
+      >
+        <kbd>[1]</kbd>
+        <iconify-icon icon="mdi:pistol"></iconify-icon>
+        <span>Blaster</span>
+      </button>
+      <button
+        type="button"
+        class="weapon-btn"
+        [class.active]="equippedWeapon() === 'scatter_shot'"
+        (click)="equipWeapon('scatter_shot')"
+      >
+        <kbd>[2]</kbd>
+        <iconify-icon icon="mdi:scatter-plot"></iconify-icon>
+        <span>Scatter</span>
+      </button>
+      <button
+        type="button"
+        class="weapon-btn"
+        [class.active]="equippedWeapon() === 'spring_mine'"
+        (click)="equipWeapon('spring_mine')"
+      >
+        <kbd>[3]</kbd>
+        <iconify-icon icon="mdi:disc"></iconify-icon>
+        <span>Mina</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Bottom: Controls Help com Iconify -->
   <div class="instructions-panel" aria-hidden="true">
     <div class="instruction-item">
       <kbd>W A S D</kbd>
-      <span>{{ isDriving() ? 'Acelerar / Marcha Ré / Curva' : 'Movimento do Herói' }}</span>
+      <iconify-icon icon="mdi:keyboard" class="instruction-icon"></iconify-icon>
+      <span>{{ isDriving() ? 'Acelerar / Ré / Curva' : 'Movimento do Herói' }}</span>
     </div>
     <div class="instruction-item">
       <kbd>Espaço</kbd>
-      <span>{{ isDriving() ? 'Freio de Mão & Drift' : 'Pular' }}</span>
+      <span>{{ isDriving() ? 'Freio & Drift' : 'Pular' }}</span>
+    </div>
+    <div class="instruction-item">
+      <kbd>J / Clique</kbd>
+      <iconify-icon icon="mdi:mouse-left-click" class="instruction-icon"></iconify-icon>
+      <span>Disparar</span>
+    </div>
+    <div class="instruction-item">
+      <kbd>1 2 3</kbd>
+      <span>Armas</span>
     </div>
     @if (isDriving() && canDismount()) {
       <div class="instruction-item">
         <kbd>E</kbd>
+        <iconify-icon icon="mdi:car-door" class="instruction-icon"></iconify-icon>
         <span>Desembarcar</span>
       </div>
     } @else if (!isDriving() && canInteract()) {
       <div class="instruction-item">
         <kbd>E</kbd>
+        <iconify-icon icon="mdi:car-key" class="instruction-icon"></iconify-icon>
         <span>Entrar</span>
       </div>
     }
-    <div class="instruction-item">
-      <kbd>Mouse</kbd>
-      <span>Girar Câmera</span>
-    </div>
   </div>
+
+  <!-- FASE 7: Seletor de Modo de Jogo (Lobby Inicial) -->
+  @if (matchState() === 'waiting') {
+    <div class="match-lobby-backdrop" role="dialog" aria-modal="true" aria-label="Seletor de Modo de Jogo">
+      <div class="lobby-card">
+        <div class="lobby-header">
+          <iconify-icon icon="mdi:toy-brick-outline" class="lobby-header-icon"></iconify-icon>
+          <h2>MODOS DE JOGO OVERDRIVE</h2>
+          <p class="lobby-subtitle">Selecione seu modo de batalha LEGO e prepare seu veículo</p>
+        </div>
+
+        <div class="mode-selector-group">
+          <button
+            type="button"
+            class="mode-card-btn"
+            [class.mode-selected]="gameMode() === 'coop_survival'"
+            (click)="selectGameMode('coop_survival')"
+          >
+            <div class="mode-icon-box mode-coop">
+              <iconify-icon icon="mdi:shield-account"></iconify-icon>
+            </div>
+            <div class="mode-details">
+              <span class="mode-title">Sobrevivência Co-op</span>
+              <span class="mode-desc">Enfrente 5 ondas de blocos hostis com cartas de upgrades roguelite</span>
+            </div>
+            <div class="mode-radio-dot"></div>
+          </button>
+
+          <button
+            type="button"
+            class="mode-card-btn"
+            [class.mode-selected]="gameMode() === 'pvp_deathmatch'"
+            (click)="selectGameMode('pvp_deathmatch')"
+          >
+            <div class="mode-icon-box mode-pvp">
+              <iconify-icon icon="mdi:sword-cross"></iconify-icon>
+            </div>
+            <div class="mode-details">
+              <span class="mode-title">PvP Deathmatch</span>
+              <span class="mode-desc">Combate dinâmico de destruição de blocos todos contra todos</span>
+            </div>
+            <div class="mode-radio-dot"></div>
+          </button>
+        </div>
+
+        <div class="lobby-action-row">
+          <button
+            type="button"
+            class="btn-ready-start"
+            [class.btn-ready-active]="isPlayerReady()"
+            (click)="toggleReady()"
+          >
+            <iconify-icon [icon]="isPlayerReady() ? 'mdi:check-circle' : 'mdi:play-circle'"></iconify-icon>
+            <span>{{ isPlayerReady() ? 'AGUARDANDO INÍCIO...' : 'PRONTO (INICIAR PARTIDA)' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- FASE 7: Overlay de Contagem Regressiva -->
+  @if (matchState() === 'countdown') {
+    <div class="match-countdown-overlay" aria-live="assertive">
+      <div class="countdown-badge-box">
+        <span class="countdown-number">{{ countdownSeconds() > 0 ? countdownSeconds() : 'VAI!' }}</span>
+        <span class="countdown-label">PREPARE-SE PARA O COMBATE!</span>
+      </div>
+    </div>
+  }
+
+  <!-- FASE 7: HUD de Ondas em Tempo Real (Sobrevivência Co-op) -->
+  @if (matchState() === 'in_progress' && gameMode() === 'coop_survival') {
+    <div class="wave-hud-top" aria-label="Status da Onda">
+      <div class="wave-tag">
+        <iconify-icon icon="mdi:waves" class="wave-icon"></iconify-icon>
+        <span class="wave-title">ONDA {{ currentWave() }} / {{ maxWaves() }}</span>
+      </div>
+      <div class="enemies-tag" [class.enemies-alert]="enemiesRemaining() <= 2">
+        <iconify-icon icon="mdi:skull-scan" class="enemies-icon"></iconify-icon>
+        <span class="enemies-count">INIMIGOS: {{ enemiesRemaining() }}</span>
+      </div>
+    </div>
+  }
+
+  <!-- FASE 7: Placar PvP em Tempo Real -->
+  @if (gameMode() === 'pvp_deathmatch' && (matchState() === 'in_progress' || matchState() === 'countdown')) {
+    <div class="pvp-scoreboard-card" aria-label="Placar da Partida PvP">
+      <div class="scoreboard-header">
+        <iconify-icon icon="mdi:trophy-outline"></iconify-icon>
+        <span>PLACAR DEATHMATCH</span>
+      </div>
+      <div class="scoreboard-body">
+        @for (score of playerScores(); track score.playerId) {
+          <div class="score-row" [class.local-scorer]="score.playerId === 'local_player'">
+            <span class="scorer-name">{{ score.name }}</span>
+            <span class="scorer-stats">K: {{ score.kills }} | D: {{ score.deaths }}</span>
+            <span class="scorer-pts">{{ score.score }} pts</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- FASE 7: Modal de Upgrades Roguelite (Wave Intermission) -->
+  @if (matchState() === 'wave_intermission') {
+    <div class="upgrade-modal-backdrop" role="dialog" aria-modal="true" aria-label="Upgrades Roguelite">
+      <div class="upgrade-modal-card">
+        <div class="upgrade-header">
+          <div class="wave-complete-pill">
+            <iconify-icon icon="mdi:check-decagram"></iconify-icon>
+            <span>ONDA {{ currentWave() }} COMPLETA!</span>
+          </div>
+          <h2>ESCOLHA SEU UPGRADE ROGUELITE</h2>
+          <span class="intermission-clock">Próxima onda em: {{ intermissionSeconds() }}s</span>
+        </div>
+
+        <div class="upgrade-cards-container">
+          @for (card of upgradeOptions(); track card.id) {
+            <button type="button" class="upgrade-card-item" (click)="chooseUpgrade(card.id)">
+              <div class="upgrade-icon-wrap">
+                <iconify-icon [icon]="card.icon"></iconify-icon>
+              </div>
+              <h3 class="upgrade-title">{{ card.title }}</h3>
+              <p class="upgrade-desc">{{ card.description }}</p>
+              <span class="upgrade-choose-btn">SELECIONAR BÔNUS</span>
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- FASE 7: Tela de Fim de Jogo (Vitória / Derrota) -->
+  @if (matchState() === 'victory' || matchState() === 'game_over') {
+    <div class="match-result-backdrop" role="dialog" aria-modal="true" aria-label="Resultado da Partida">
+      <div class="match-result-card" [class.result-victory]="matchState() === 'victory'" [class.result-defeat]="matchState() === 'game_over'">
+        <div class="result-icon-banner">
+          <iconify-icon [icon]="matchState() === 'victory' ? 'mdi:trophy-award' : 'mdi:skull'"></iconify-icon>
+        </div>
+        <h2 class="result-title">{{ matchState() === 'victory' ? 'VITÓRIA ÉPICA!' : 'FIM DE JOGO' }}</h2>
+        <p class="result-subtitle">
+          {{ matchState() === 'victory' ? 'Você sobreviveu a todas as ondas e dominou a arena de blocos!' : 'Seu veículo e herói foram desmontados em combate!' }}
+        </p>
+
+        <div class="result-stats-grid">
+          <div class="result-stat-cell">
+            <span class="cell-label">Modo</span>
+            <span class="cell-value">{{ gameMode() === 'coop_survival' ? 'Sobrevivência Co-op' : 'PvP Deathmatch' }}</span>
+          </div>
+          <div class="result-stat-cell">
+            <span class="cell-label">Onda Alcançada</span>
+            <span class="cell-value">{{ currentWave() }} / {{ maxWaves() }}</span>
+          </div>
+          <div class="result-stat-cell">
+            <span class="cell-label">Pontos</span>
+            <span class="cell-value">{{ playerScores()[0]?.score || 0 }} pts</span>
+          </div>
+        </div>
+
+        <button type="button" class="btn-play-again" (click)="restartMatch()">
+          <iconify-icon icon="mdi:restart"></iconify-icon>
+          <span>JOGAR NOVAMENTE</span>
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- FASE 7.3: Overlay de Morte do Jogador: VOCÊ MORREU -->
+  @if (isPlayerDead() && hasJoinedArena()) {
+    <div class="player-death-overlay" role="alert" aria-live="assertive">
+      <div class="death-card">
+        <div class="death-icon-glow">
+          <iconify-icon icon="mdi:skull-crossbones"></iconify-icon>
+        </div>
+        <h1 class="death-heading">VOCÊ MORREU!</h1>
+        <p class="death-subtext">
+          @if (gameMode() === 'pvp_deathmatch') {
+            Seu piloto foi desmontado em combate! Renascendo na arena...
+          } @else {
+            Você foi desmontado pelos invasores de blocos!
+          }
+        </p>
+        @if (gameMode() === 'pvp_deathmatch') {
+          <div class="respawn-pill">
+            <iconify-icon icon="mdi:reload-alert" class="spin-slow"></iconify-icon>
+            <span>RENASCENDO EM INSTANTES...</span>
+          </div>
+        } @else {
+          <button type="button" class="btn-respawn" (click)="restartMatch()">
+            <iconify-icon icon="mdi:restart"></iconify-icon>
+            <span>REINICIAR BATALHA</span>
+          </button>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- FASE 7.2: Tela Inicial de Entrada / Lobby (Nome do Jogador & Suporte Multi-Navegador) -->
+  @if (!hasJoinedArena()) {
+    <div class="arena-entrance-backdrop" role="dialog" aria-modal="true" aria-label="Entrar na Arena">
+      <div class="entrance-card">
+        <div class="entrance-badge">
+          <iconify-icon icon="mdi:toy-brick" class="entrance-stud-icon"></iconify-icon>
+          <span>BRICK SURVIVORS: OVERDRIVE</span>
+        </div>
+
+        <h1 class="entrance-title">ENTRE NA ARENA DE BLOCOS</h1>
+        <p class="entrance-desc">
+          Digite o nome do seu piloto para conectar em tempo real e disputar partidas cooperativas e PvP na arena 100x100!
+        </p>
+
+        <form class="entrance-form" (submit)="$event.preventDefault(); enterArena()">
+          <div class="input-field-group">
+            <label for="pilotNameInput" class="input-label">NOME DO PILOTO</label>
+            <div class="input-wrapper">
+              <iconify-icon icon="mdi:account-badge" class="input-icon"></iconify-icon>
+              <input
+                id="pilotNameInput"
+                type="text"
+                class="pilot-name-input"
+                [value]="pilotNameInput()"
+                (input)="onPilotNameChange($event)"
+                placeholder="Ex: BrickMaster99"
+                maxlength="16"
+                autofocus
+                autocomplete="off"
+              />
+            </div>
+            @if (nameValidationError()) {
+              <span class="validation-error-text">{{ nameValidationError() }}</span>
+            }
+          </div>
+
+          <button type="submit" class="btn-enter-arena">
+            <iconify-icon icon="mdi:play" class="btn-play-icon"></iconify-icon>
+            <span>ENTRAR NA ARENA</span>
+          </button>
+        </form>
+
+        <div class="entrance-footer-tips">
+          <span class="tip-pill"><iconify-icon icon="mdi:earth"></iconify-icon> Multi-Navegador</span>
+          <span class="tip-pill"><iconify-icon icon="mdi:weather-night"></iconify-icon> Ciclo Dia e Noite</span>
+          <span class="tip-pill"><iconify-icon icon="mdi:map-marker-radius"></iconify-icon> Arena 100x100</span>
+        </div>
+      </div>
+    </div>
+  }
 </div>

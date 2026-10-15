@@ -49,56 +49,54 @@ export function updateMovementSystem(
     return;
   }
 
-  // 1. Rotação / Esterçamento Angular do Personagem (A/D)
-  const turnSpeed = controller.turnSpeed ?? 3.8;
-  let steerInput = 0;
-  if (input.left) steerInput += 1;
-  if (input.right) steerInput -= 1;
+  // 1. Vetores direcionais relativos à orientação do herói (alinhada à mira)
+  const angle = transform.rotationY;
+  const fx = Math.sin(angle);
+  const fz = Math.cos(angle);
+  const rx = -Math.cos(angle);
+  const rz = Math.sin(angle); // Vetor lateral perpendicular para a direita da tela (+D)
 
-  if (steerInput !== 0) {
-    transform.rotationY += steerInput * turnSpeed * dt;
-  }
+  // 2. Captura dos eixos de input
+  const forwardAxis = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);
+  const strafeAxis = (input.right ? 1 : 0) - (input.left ? 1 : 0); // D = +1 (direita), A = -1 (esquerda)
+  const hasMoveInput = forwardAxis !== 0 || strafeAxis !== 0;
 
-  // 2. Aceleração / Frenagem / Recuo (W/S)
-  const reverseMax = Math.abs(controller.reverseMaxSpeed ?? (controller.maxSpeed * 0.55));
+  if (hasMoveInput) {
+    let moveDirX = fx * forwardAxis + rx * strafeAxis;
+    let moveDirZ = fz * forwardAxis + rz * strafeAxis;
+    const len = Math.hypot(moveDirX, moveDirZ) || 1;
+    moveDirX /= len;
+    moveDirZ /= len;
 
-  if (input.forward) {
-    if (controller.speed < -0.5) {
-      // Freia o recuo
-      controller.speed += controller.deceleration * dt;
-    } else {
-      // Acelera para frente na direção frontal
-      controller.speed = Math.min(
-        controller.maxSpeed,
-        controller.speed + controller.acceleration * dt,
-      );
-    }
-  } else if (input.backward) {
-    if (controller.speed > 0.5) {
-      // Freia a marcha à frente
-      controller.speed = Math.max(0, controller.speed - controller.deceleration * dt);
-    } else {
-      // Recua suavemente de ré
-      controller.speed = Math.max(
-        -reverseMax,
-        controller.speed - controller.acceleration * 0.75 * dt,
-      );
-    }
+    // Acelera controller.speed até o máximo
+    controller.speed = Math.min(
+      controller.maxSpeed,
+      controller.speed + controller.acceleration * dt,
+    );
+
+    velocity.vx = moveDirX * controller.speed;
+    velocity.vz = moveDirZ * controller.speed;
+    controller.isMoving = true;
+    controller.moveAngle = Math.atan2(moveDirX, moveDirZ);
   } else {
     // Desaceleração passiva por atrito
     if (controller.speed > 0) {
       controller.speed = Math.max(0, controller.speed - controller.deceleration * dt);
-    } else if (controller.speed < 0) {
-      controller.speed = Math.min(0, controller.speed + controller.deceleration * dt);
+      const currentLen = Math.hypot(velocity.vx, velocity.vz);
+      if (currentLen > 0.001) {
+        velocity.vx = (velocity.vx / currentLen) * controller.speed;
+        velocity.vz = (velocity.vz / currentLen) * controller.speed;
+      } else {
+        velocity.vx = 0;
+        velocity.vz = 0;
+      }
+    } else {
+      controller.speed = 0;
+      velocity.vx = 0;
+      velocity.vz = 0;
     }
+    controller.isMoving = controller.speed > 0.05;
   }
-
-  controller.isMoving = Math.abs(controller.speed) > 0.05 || steerInput !== 0;
-  controller.moveAngle = transform.rotationY;
-
-  // 3. Vetor de velocidade baseado no ângulo atual
-  velocity.vx = Math.sin(transform.rotationY) * controller.speed;
-  velocity.vz = Math.cos(transform.rotationY) * controller.speed;
 
   // 4. Física Vertical no Eixo Y (Pulo e Gravidade)
   const jumpForce = controller.jumpForce ?? 7.2;
@@ -153,4 +151,77 @@ export function updateMovementSystem(
     transform.z = bounds.maxZ;
     velocity.vz = 0;
   }
+}
+
+/**
+ * Trata a colisão sólida e push-out entre pedestre e veículo.
+ * Utiliza o retângulo orientado (OBB) do carro no plano XZ para impedir que
+ * o pedestre atravesse a lataria e permitir deslizamento suave pelas bordas.
+ */
+export function resolvePedestrianVehicleCollision(
+  heroTransform: TransformComponent,
+  heroVelocity: VelocityComponent,
+  vehicleTransform: TransformComponent,
+  heroRadius = 0.45,
+  vehicleHalfWidth = 1.15,
+  vehicleHalfLength = 1.85,
+): boolean {
+  const dx = heroTransform.x - vehicleTransform.x;
+  const dz = heroTransform.z - vehicleTransform.z;
+
+  const cosAngle = Math.cos(-vehicleTransform.rotationY);
+  const sinAngle = Math.sin(-vehicleTransform.rotationY);
+
+  // Coordenadas no referencial local orientado do veículo
+  const localX = dx * cosAngle - dz * sinAngle;
+  const localZ = dx * sinAngle + dz * cosAngle;
+
+  const thresholdX = vehicleHalfWidth + heroRadius;
+  const thresholdZ = vehicleHalfLength + heroRadius;
+
+  if (Math.abs(localX) < thresholdX && Math.abs(localZ) < thresholdZ) {
+    const overlapX = thresholdX - Math.abs(localX);
+    const overlapZ = thresholdZ - Math.abs(localZ);
+
+    let resolvedLocalX = localX;
+    let resolvedLocalZ = localZ;
+
+    // Projeta velocidade no referencial local para permitir deslizamento tangencial
+    let localVx = heroVelocity.vx * cosAngle - heroVelocity.vz * sinAngle;
+    let localVz = heroVelocity.vx * sinAngle + heroVelocity.vz * cosAngle;
+
+    if (overlapX < overlapZ) {
+      resolvedLocalX += localX >= 0 ? overlapX : -overlapX;
+      // Anula velocidade normal de penetração no eixo X local
+      if (localX >= 0 && localVx < 0) {
+        localVx = 0;
+      } else if (localX < 0 && localVx > 0) {
+        localVx = 0;
+      }
+      localVz *= 0.85; // Permite deslizar suavemente pelas laterais
+    } else {
+      resolvedLocalZ += localZ >= 0 ? overlapZ : -overlapZ;
+      // Anula velocidade normal de penetração no eixo Z local
+      if (localZ >= 0 && localVz < 0) {
+        localVz = 0;
+      } else if (localZ < 0 && localVz > 0) {
+        localVz = 0;
+      }
+      localVx *= 0.85; // Permite deslizar suavemente pela dianteira/traseira
+    }
+
+    const worldCos = Math.cos(vehicleTransform.rotationY);
+    const worldSin = Math.sin(vehicleTransform.rotationY);
+
+    heroTransform.x = vehicleTransform.x + resolvedLocalX * worldCos - resolvedLocalZ * worldSin;
+    heroTransform.z = vehicleTransform.z + resolvedLocalX * worldSin + resolvedLocalZ * worldCos;
+
+    // Converte de volta para coordenadas globais
+    heroVelocity.vx = localVx * worldCos - localVz * worldSin;
+    heroVelocity.vz = localVx * worldSin + localVz * worldCos;
+
+    return true;
+  }
+
+  return false;
 }

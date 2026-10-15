@@ -37,21 +37,21 @@ describe('GameGateway', () => {
     };
   }
 
-  function createMockServer(): Server {
-    const toMock = vi.fn().mockReturnValue({
+  function createMockServer(): { serverMock: Server; toSpy: ReturnType<typeof vi.fn> } {
+    const toSpy = vi.fn().mockReturnValue({
       emit: vi.fn(),
     });
 
     const serverMock = {
-      to: toMock,
+      to: toSpy,
     } as unknown as Server;
 
-    return serverMock;
+    return { serverMock, toSpy };
   }
 
   describe('Lifecycle and Initialization', () => {
     it('should initialize gateway and attach server to gameRoomService', () => {
-      const serverMock = createMockServer();
+      const { serverMock } = createMockServer();
       const setServerSpy = vi.spyOn(gameRoomService, 'setServer');
 
       gateway.afterInit(serverMock);
@@ -98,6 +98,35 @@ describe('GameGateway', () => {
       expect(response.status).toBe('ok');
       expect(response.name).toBe('Hero_sock');
     });
+
+    it('should register and maintain playerName passed in payload when joining', async () => {
+      const { socket } = createMockSocketContext('client-named');
+      const payload: JoinGameDto = { playerName: 'OverdriveMaster' };
+
+      const response = await gateway.handleJoinGame(socket, payload);
+
+      expect(response.name).toBe('OverdriveMaster');
+      expect(gameRoomService.getPlayer('client-named')?.name).toBe('OverdriveMaster');
+
+      const updatedPayload: JoinGameDto = { playerName: 'OverdriveLegend' };
+      const updateResponse = await gateway.handleJoinGame(socket, updatedPayload);
+      expect(updateResponse.name).toBe('OverdriveLegend');
+      expect(gameRoomService.getPlayer('client-named')?.name).toBe('OverdriveLegend');
+    });
+
+    it('should register player with selected characterType', async () => {
+      const { socket } = createMockSocketContext('client-char');
+      const payload: JoinGameDto = {
+        playerName: 'BrickHero',
+        characterType: 'funny_indigenous',
+      };
+
+      const response = await gateway.handleJoinGame(socket, payload);
+
+      expect(response.status).toBe('ok');
+      const player = gameRoomService.getPlayer('client-char');
+      expect(player?.characterType).toBe('funny_indigenous');
+    });
   });
 
   describe('playerInput event', () => {
@@ -126,6 +155,36 @@ describe('GameGateway', () => {
     });
   });
 
+  describe('playerShoot event', () => {
+    it('should delegate shoot action to gameRoomService and return result', () => {
+      gameRoomService.addPlayer('client-1', 'Sharpshooter');
+
+      const { socket } = createMockSocketContext('client-1');
+      const result = gateway.handlePlayerShoot(socket, {
+        weaponType: 'stud_blaster',
+        origin: { x: 0, y: 1.0, z: 0 },
+        direction: { x: 0, y: 0, z: 1 },
+        clientTimestamp: Date.now(),
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.projectilesSpawned).toBe(1);
+    });
+
+    it('should return error if unauthenticated/unconnected player shoots', () => {
+      const { socket } = createMockSocketContext('ghost-client');
+      const result = gateway.handlePlayerShoot(socket, {
+        weaponType: 'stud_blaster',
+        origin: { x: 0, y: 0, z: 0 },
+        direction: { x: 0, y: 0, z: 1 },
+        clientTimestamp: Date.now(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toBe('Player not connected');
+    });
+  });
+
   describe('ping and latency measurement', () => {
     it('should respond to ping with pong and timestamps for RTT calculation', () => {
       const { socket, emitMock } = createMockSocketContext('client-1');
@@ -147,6 +206,66 @@ describe('GameGateway', () => {
       expect(typeof response.clientTimestamp).toBe('number');
       expect(typeof response.serverTimestamp).toBe('number');
       expect(emitMock).toHaveBeenCalledWith('pong', response);
+    });
+  });
+
+  describe('Match Mode and Ready Handlers', () => {
+    it('should handle changeMode and broadcast matchSnapshot', () => {
+      const { serverMock, toSpy } = createMockServer();
+      gateway.afterInit(serverMock);
+
+      const { socket } = createMockSocketContext('client-1');
+      const response = gateway.handleChangeMode(socket, { mode: 'pvp_deathmatch' });
+
+      expect(response.success).toBe(true);
+      expect(response.mode).toBe('pvp_deathmatch');
+      expect(toSpy).toHaveBeenCalledWith('game-room');
+    });
+
+    it('should handle readyMatch and broadcast matchSnapshot', () => {
+      const { serverMock, toSpy } = createMockServer();
+      gateway.afterInit(serverMock);
+
+      const { socket } = createMockSocketContext('client-1');
+      gameRoomService.addPlayer('client-1', 'Player1');
+
+      const response = gateway.handleReadyMatch(socket, { ready: true });
+
+      expect(response.success).toBe(true);
+      expect(toSpy).toHaveBeenCalledWith('game-room');
+    });
+
+    it('should handle selectUpgrade when player is connected', () => {
+      const { serverMock } = createMockServer();
+      gateway.afterInit(serverMock);
+
+      const { socket } = createMockSocketContext('client-1');
+      gameRoomService.addPlayer('client-1', 'Player1');
+
+      const response = gateway.handleSelectUpgrade(socket, { upgradeId: 'upg-speed-1' });
+
+      expect(response).toHaveProperty('success');
+    });
+
+    it('should reject selectUpgrade for unknown player', () => {
+      const { socket } = createMockSocketContext('unknown-client');
+      const response = gateway.handleSelectUpgrade(socket, { upgradeId: 'upg-speed-1' });
+
+      expect(response.success).toBe(false);
+    });
+
+    it('should handle restartMatch and reset game state', () => {
+      const { serverMock, toSpy } = createMockServer();
+      gateway.afterInit(serverMock);
+
+      const { socket } = createMockSocketContext('client-1');
+      gameRoomService.addPlayer('client-1', 'Player1');
+
+      const response = gateway.handleRestartMatch(socket);
+
+      expect(response.success).toBe(true);
+      expect(response.state).toBe('waiting');
+      expect(toSpy).toHaveBeenCalledWith('game-room');
     });
   });
 });

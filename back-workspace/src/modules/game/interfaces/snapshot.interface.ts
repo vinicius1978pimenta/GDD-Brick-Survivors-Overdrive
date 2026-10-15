@@ -1,6 +1,10 @@
+import type { DamageEventSnapshot, ProjectileSnapshot, WeaponType } from './combat.interface.js';
+import type { CharacterType } from './game-room.interface.js';
+
 export interface PlayerSnapshot {
   readonly id: string;
   readonly name: string;
+  readonly characterType: CharacterType;
   readonly x: number;
   readonly y: number;
   readonly z: number;
@@ -9,6 +13,11 @@ export interface PlayerSnapshot {
   readonly isDriving: boolean;
   readonly isGrounded: boolean;
   readonly vehicleId: string | null;
+  readonly health: number;
+  readonly maxHealth: number;
+  readonly hp: number;
+  readonly maxHp: number;
+  readonly weapon: WeaponType;
 }
 
 export interface VehicleSnapshot {
@@ -21,3 +30,5 @@ export interface VehicleSnapshot {
   readonly durability: number;
   readonly driverId: string | null;
 }
+
+export type { DamageEventSnapshot, ProjectileSnapshot };

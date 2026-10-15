@@ -13,17 +13,18 @@
   height: 100%;
   position: relative;
   outline: none;
+  cursor: none !important;
 }
 
 .render-canvas {
   width: 100%;
   height: 100%;
   display: block;
-  cursor: grab;
+  cursor: none !important;
 }
 
 .render-canvas:active {
-  cursor: grabbing;
+  cursor: none !important;
 }
 
 /* Top Left HUD */
@@ -55,12 +56,17 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+iconify-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+
 .stud-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #e52521;
-  box-shadow: 0 0 8px #e52521;
+  font-size: 1.1rem;
+  color: #e52521;
+  filter: drop-shadow(0 0 6px rgba(229, 37, 33, 0.8));
 }
 
 .badge-network {
@@ -375,3 +381,1325 @@
   font-weight: 600;
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
+
+/* Floating Combat Text Overlay */
+.combat-text-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 25;
+  overflow: hidden;
+}
+
+.floating-combat-number {
+  position: absolute;
+  font-family: inherit;
+  font-size: 1.25rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 0, 0.6);
+  user-select: none;
+  white-space: nowrap;
+  transition: opacity 0.1s ease-out;
+}
+
+/* Bottom Left Weapon Card */
+.hud-weapon-card {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 10;
+  background: rgba(13, 17, 23, 0.9);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 12px;
+  padding: 0.6rem 0.8rem;
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 190px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.weapon-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.weapon-icon {
+  font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.weapon-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.weapon-title {
+  font-size: 0.62rem;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.weapon-name {
+  font-size: 0.82rem;
+  color: #fcd116;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.weapon-cooldown-bar {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.weapon-cooldown-fill {
+  height: 100%;
+  width: 0%;
+  background: #ef4444;
+  transition: width 0.08s linear;
+}
+
+.weapon-cooldown-fill.cooldown-active {
+  background: #f59e0b;
+}
+
+.weapon-hotkeys {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.weapon-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #cbd5e1;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.25rem 0.35rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  transition: all 0.15s ease;
+}
+
+.weapon-btn:hover {
+  background: rgba(251, 191, 36, 0.15);
+  border-color: rgba(251, 191, 36, 0.4);
+  color: #fcd116;
+}
+
+.weapon-btn.active {
+  background: rgba(251, 191, 36, 0.25);
+  border-color: #fcd116;
+  color: #fcd116;
+  font-weight: 800;
+}
+
+.weapon-btn kbd {
+  font-size: 0.62rem;
+  color: #94a3b8;
+}
+
+/* Iconify Icon Specific Stylings */
+.network-dot-icon {
+  font-size: 0.95rem;
+}
+
+.mode-icon {
+  font-size: 0.9rem;
+}
+
+.hud-stat-icon {
+  font-size: 1.25rem;
+  color: #38bdf8;
+  margin-right: 0.2rem;
+  align-self: center;
+}
+
+.durability-icon {
+  font-size: 1.05rem;
+}
+
+.prompt-icon {
+  font-size: 1.2rem;
+}
+
+.instruction-icon {
+  font-size: 0.95rem;
+  color: #cbd5e1;
+}
+
+.weapon-active-icon {
+  font-size: 1.5rem;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.color-blaster {
+  color: #fcd116;
+  filter: drop-shadow(0 0 8px rgba(252, 209, 22, 0.65));
+}
+
+.color-scatter {
+  color: #38bdf8;
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.65));
+}
+
+.color-mine {
+  color: #ef4444;
+  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.65));
+}
+
+/* Crosshair Reticle (Mira Dinâmica no Mouse) */
+.crosshair-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  pointer-events: none;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.92;
+  will-change: left, top, transform;
+  transition: opacity 0.2s ease, transform 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.crosshair-container.crosshair-driving {
+  opacity: 0.45;
+  transform: translate(-50%, -50%) scale(0.85);
+}
+
+.crosshair-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: #fcd116;
+  box-shadow: 0 0 8px #fcd116;
+  transition: transform 0.1s ease, background-color 0.2s ease;
+}
+
+.crosshair-ring {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(252, 209, 22, 0.45);
+  box-shadow: 0 0 6px rgba(252, 209, 22, 0.3);
+  transition: all 0.15s ease;
+}
+
+.crosshair-line {
+  position: absolute;
+  background-color: #fcd116;
+  box-shadow: 0 0 6px rgba(252, 209, 22, 0.6);
+  border-radius: 1px;
+  transition: transform 0.12s ease-out, background-color 0.2s ease;
+}
+
+.crosshair-line.crosshair-top {
+  width: 2px;
+  height: 7px;
+  top: 4px;
+  left: calc(50% - 1px);
+}
+
+.crosshair-line.crosshair-bottom {
+  width: 2px;
+  height: 7px;
+  bottom: 4px;
+  left: calc(50% - 1px);
+}
+
+.crosshair-line.crosshair-left {
+  width: 7px;
+  height: 2px;
+  left: 4px;
+  top: calc(50% - 1px);
+}
+
+.crosshair-line.crosshair-right {
+  width: 7px;
+  height: 2px;
+  right: 4px;
+  top: calc(50% - 1px);
+}
+
+/* Arma Scatter Shot (Ciano Neon) */
+.crosshair-container[data-weapon="scatter_shot"] .crosshair-dot,
+.crosshair-container[data-weapon="scatter_shot"] .crosshair-line {
+  background-color: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.7);
+}
+
+.crosshair-container[data-weapon="scatter_shot"] .crosshair-ring {
+  border-color: rgba(56, 189, 248, 0.55);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+/* Arma Spring Mine (Vermelho Alerta) */
+.crosshair-container[data-weapon="spring_mine"] .crosshair-dot,
+.crosshair-container[data-weapon="spring_mine"] .crosshair-line {
+  background-color: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
+}
+
+.crosshair-container[data-weapon="spring_mine"] .crosshair-ring {
+  border-color: rgba(239, 68, 68, 0.55);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+/* Efeito de Disparo / Recoil Bloom */
+.crosshair-container.crosshair-firing {
+  transform: translate(-50%, -50%) scale(1.3);
+}
+
+.crosshair-container.crosshair-firing .crosshair-dot {
+  transform: scale(1.6);
+  box-shadow: 0 0 14px currentColor;
+}
+
+.crosshair-container.crosshair-firing .crosshair-ring {
+  transform: scale(1.35);
+  border-width: 2px;
+}
+
+.crosshair-container.crosshair-firing .crosshair-top {
+  transform: translateY(-4px);
+}
+
+.crosshair-container.crosshair-firing .crosshair-bottom {
+  transform: translateY(4px);
+}
+
+.crosshair-container.crosshair-firing .crosshair-left {
+  transform: translateX(-4px);
+}
+
+.crosshair-container.crosshair-firing .crosshair-right {
+  transform: translateX(4px);
+}
+
+/* ==========================================================================
+   FASE 7: Modos de Jogo, Lobby, Ondas, Upgrades Roguelite & Fim de Jogo
+   ========================================================================== */
+
+/* 1. Lobby & Seletor de Modo de Jogo */
+.match-lobby-backdrop,
+.upgrade-modal-backdrop,
+.match-result-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: rgba(10, 15, 26, 0.75);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: fadeInModal 0.25s ease-out;
+}
+
+@keyframes fadeInModal {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.lobby-card,
+.upgrade-modal-card,
+.match-result-card {
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 640px;
+  width: 100%;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 30px rgba(250, 204, 21, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  color: #f8fafc;
+  text-align: center;
+}
+
+.lobby-header-icon {
+  font-size: 2.8rem;
+  color: #fcd116;
+  filter: drop-shadow(0 0 10px rgba(252, 209, 22, 0.6));
+}
+
+.lobby-header h2,
+.upgrade-header h2,
+.result-title {
+  margin: 0.25rem 0 0 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #f8fafc;
+}
+
+.lobby-subtitle,
+.result-subtitle {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.mode-selector-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.mode-card-btn {
+  background: rgba(30, 41, 59, 0.7);
+  border: 2px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 1.25rem 1rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  color: #f8fafc;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+  position: relative;
+}
+
+.mode-card-btn:hover {
+  background: rgba(51, 65, 85, 0.8);
+  border-color: rgba(250, 204, 21, 0.6);
+  transform: translateY(-2px);
+}
+
+.mode-card-btn.mode-selected {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: #fcd116;
+  box-shadow: 0 0 20px rgba(252, 209, 22, 0.3);
+}
+
+.mode-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+}
+
+.mode-icon-box.mode-coop {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.4);
+}
+
+.mode-icon-box.mode-pvp {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+}
+
+.mode-title {
+  display: block;
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin-bottom: 0.2rem;
+}
+
+.mode-desc {
+  display: block;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+
+.btn-ready-start {
+  background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
+  color: #0f172a;
+  border: none;
+  border-radius: 10px;
+  padding: 0.9rem 1.8rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(234, 179, 8, 0.4);
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.btn-ready-start:hover {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(234, 179, 8, 0.6);
+}
+
+.btn-ready-start.btn-ready-active {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+/* 2. Overlay de Contagem Regressiva */
+.match-countdown-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.countdown-badge-box {
+  background: rgba(15, 23, 42, 0.85);
+  border: 2px solid rgba(250, 204, 21, 0.6);
+  border-radius: 20px;
+  padding: 1.5rem 3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 40px rgba(250, 204, 21, 0.4);
+  animation: pulseScale 1s infinite alternate;
+}
+
+@keyframes pulseScale {
+  from { transform: scale(0.95); }
+  to { transform: scale(1.05); }
+}
+
+.countdown-number {
+  font-size: 4.5rem;
+  font-weight: 900;
+  color: #fcd116;
+  text-shadow: 0 0 25px rgba(252, 209, 22, 0.8);
+  line-height: 1;
+}
+
+.countdown-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #e2e8f0;
+  margin-top: 0.5rem;
+}
+
+/* 3. Top Center: HUD de Ondas (Sobrevivência Co-op) */
+.wave-hud-top {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.wave-tag,
+.enemies-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.wave-tag {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  color: #60a5fa;
+}
+
+.enemies-tag {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #f87171;
+}
+
+.enemies-tag.enemies-alert {
+  border-color: #22c55e;
+  color: #4ade80;
+  animation: pulseGreen 1s infinite alternate;
+}
+
+@keyframes pulseGreen {
+  from { box-shadow: 0 0 6px rgba(34, 197, 94, 0.4); }
+  to { box-shadow: 0 0 16px rgba(34, 197, 94, 0.8); }
+}
+
+/* 4. Placar PvP em Tempo Real */
+.pvp-scoreboard-card {
+  position: absolute;
+  top: 4.5rem;
+  right: 1rem;
+  z-index: 10;
+  pointer-events: none;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  padding: 0.65rem 0.9rem;
+  min-width: 220px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+}
+
+.scoreboard-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #fcd116;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.3rem;
+}
+
+.scoreboard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.score-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+
+.score-row.local-scorer {
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.scorer-name {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scorer-stats {
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.scorer-pts {
+  font-weight: 700;
+  color: #fcd116;
+}
+
+/* 5. Modal de Upgrades Roguelite (Wave Intermission) */
+.upgrade-modal-card {
+  max-width: 820px;
+}
+
+.wave-complete-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  color: #4ade80;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.intermission-clock {
+  display: block;
+  font-size: 0.85rem;
+  color: #fcd116;
+  margin-top: 0.25rem;
+  font-weight: 600;
+}
+
+.upgrade-cards-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.upgrade-card-item {
+  background: rgba(30, 41, 59, 0.7);
+  border: 2px solid rgba(148, 163, 184, 0.25);
+  border-radius: 14px;
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  cursor: pointer;
+  color: #f8fafc;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+}
+
+.upgrade-card-item:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: #38bdf8;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(56, 189, 248, 0.35);
+}
+
+.upgrade-icon-wrap {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+}
+
+.upgrade-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #fcd116;
+}
+
+.upgrade-desc {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  line-height: 1.35;
+  flex: 1;
+}
+
+.upgrade-choose-btn {
+  background: rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  transition: all 0.2s ease;
+}
+
+.upgrade-card-item:hover .upgrade-choose-btn {
+  background: #38bdf8;
+  color: #0f172a;
+}
+
+/* 6. Tela de Fim de Jogo */
+.match-result-card.result-victory {
+  border-color: rgba(34, 197, 94, 0.6);
+  box-shadow: 0 0 35px rgba(34, 197, 94, 0.3);
+}
+
+.match-result-card.result-defeat {
+  border-color: rgba(239, 68, 68, 0.6);
+  box-shadow: 0 0 35px rgba(239, 68, 68, 0.3);
+}
+
+.result-icon-banner {
+  font-size: 3.5rem;
+}
+
+.result-victory .result-icon-banner {
+  color: #22c55e;
+  filter: drop-shadow(0 0 12px rgba(34, 197, 94, 0.8));
+}
+
+.result-defeat .result-icon-banner {
+  color: #ef4444;
+  filter: drop-shadow(0 0 12px rgba(239, 68, 68, 0.8));
+}
+
+.result-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.result-stat-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cell-label {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.cell-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.btn-play-again {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.85rem 1.6rem;
+  font-size: 1rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 18px rgba(59, 130, 246, 0.4);
+}
+
+.btn-play-again:hover {
+  filter: brightness(1.15);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.6);
+}
+
+/* ==========================================================================
+   FASE 7.2: OVERHEAD HEALTH BARS & PLAYER TAGS (3D PROJECTION)
+   ========================================================================== */
+.overhead-tags-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 12;
+}
+
+.player-overhead-tag {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  will-change: left, top;
+  transition: opacity 0.15s ease;
+}
+
+.overhead-name-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  padding: 2px 8px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.tag-local .overhead-name-pill {
+  border-color: rgba(252, 209, 22, 0.65);
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.local-star-icon {
+  color: #fcd116;
+  font-size: 0.85rem;
+}
+
+.overhead-player-name {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #f8fafc;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.tag-local .overhead-player-name {
+  color: #fcd116;
+}
+
+.overhead-hp-bar {
+  width: 68px;
+  height: 6px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.overhead-hp-fill {
+  height: 100%;
+  transition: width 0.15s ease, background-color 0.2s ease;
+  border-radius: 2px;
+}
+
+/* ==========================================================================
+   FASE 7.2: HUD PILOT HEALTH CARD & DAY/NIGHT BADGE
+   ========================================================================== */
+.pilot-hp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 6px 12px;
+  backdrop-filter: blur(8px);
+  min-width: 190px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.2s ease;
+}
+
+.pilot-hp-card.hp-mid {
+  border-color: rgba(245, 158, 11, 0.6);
+}
+
+.pilot-hp-card.hp-low {
+  border-color: rgba(239, 68, 68, 0.8);
+  animation: pulse-hp 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse-hp {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(239, 68, 68, 0.75);
+  }
+}
+
+.hp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hp-label-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hp-icon {
+  font-size: 1rem;
+  color: #10b981;
+}
+
+.hp-low .hp-icon {
+  color: #ef4444;
+}
+
+.hp-mid .hp-icon {
+  color: #f59e0b;
+}
+
+.pilot-display-name {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #f8fafc;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.hp-numeric-val {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.hp-bar-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.hp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  transition: width 0.2s ease;
+}
+
+.hp-mid .hp-bar-fill {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.hp-low .hp-bar-fill {
+  background: linear-gradient(90deg, #dc2626, #ef4444);
+}
+
+.badge-daynight {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fcd116;
+  backdrop-filter: blur(6px);
+}
+
+.badge-daynight.phase-night {
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+.daynight-text {
+  letter-spacing: 0.5px;
+}
+
+/* ==========================================================================
+   FASE 7.2: ARENA ENTRANCE / LOBBY MODAL (LEGO THEME & MULTI-BROWSER)
+   ========================================================================== */
+.arena-entrance-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: rgba(8, 12, 22, 0.88);
+  backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.entrance-card {
+  max-width: 480px;
+  width: 100%;
+  background: linear-gradient(145deg, #131b2e 0%, #0d1322 100%);
+  border: 2px solid #fcd116;
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 0 24px rgba(252, 209, 22, 0.25);
+}
+
+.entrance-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(252, 209, 22, 0.15);
+  border: 1px solid #fcd116;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #fcd116;
+  margin-bottom: 1.25rem;
+  letter-spacing: 0.5px;
+}
+
+.entrance-stud-icon {
+  font-size: 1rem;
+}
+
+.entrance-title {
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: #f8fafc;
+  letter-spacing: 1px;
+  margin: 0 0 0.75rem 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.entrance-desc {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin: 0 0 1.8rem 0;
+}
+
+.entrance-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.input-field-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
+.input-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #cbd5e1;
+  letter-spacing: 0.5px;
+}
+
+.input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.25rem;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.pilot-name-input {
+  width: 100%;
+  background: #090d16;
+  border: 1.5px solid #334155;
+  border-radius: 10px;
+  padding: 12px 14px 12px 44px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f8fafc;
+  outline: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.pilot-name-input:focus {
+  border-color: #fcd116;
+  box-shadow: 0 0 12px rgba(252, 209, 22, 0.35);
+  background: #0d1322;
+}
+
+.validation-error-text {
+  font-size: 0.78rem;
+  color: #ef4444;
+  font-weight: 600;
+  text-align: left;
+}
+
+.btn-enter-arena {
+  width: 100%;
+  background: linear-gradient(135deg, #fcd116 0%, #f59e0b 100%);
+  color: #0f172a;
+  border: none;
+  border-radius: 10px;
+  padding: 14px 20px;
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);
+}
+
+.btn-enter-arena:hover {
+  filter: brightness(1.12);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(245, 158, 11, 0.6);
+}
+
+.btn-enter-arena:active {
+  transform: translateY(0);
+}
+
+.btn-play-icon {
+  font-size: 1.35rem;
+}
+
+.entrance-footer-tips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 1.75rem;
+}
+
+.tip-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   FASE 7.3: Overlay de Morte do Jogador (VOCÊ MORREU)
+   ========================================================================== */
+
+.player-death-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
+  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.82) 0%, rgba(2, 6, 23, 0.96) 75%),
+              radial-gradient(circle at center, rgba(220, 38, 38, 0.35) 0%, rgba(0, 0, 0, 0.6) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: deathFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: auto;
+}
+
+.death-card {
+  background: linear-gradient(145deg, #1e1b2e 0%, #0f172a 100%);
+  border: 2px solid rgba(239, 68, 68, 0.65);
+  box-shadow: 0 0 60px rgba(220, 38, 38, 0.45), 0 20px 40px rgba(0, 0, 0, 0.8);
+  border-radius: 24px;
+  padding: 2.5rem 3rem;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  animation: deathCardPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.death-icon-glow {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.3) 0%, rgba(239, 68, 68, 0.05) 70%);
+  border: 2px solid #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.8rem;
+  color: #ef4444;
+  filter: drop-shadow(0 0 15px rgba(239, 68, 68, 0.7));
+  animation: deathPulse 1.8s infinite ease-in-out;
+}
+
+.death-heading {
+  font-size: 2.4rem;
+  font-weight: 900;
+  color: #f87171;
+  letter-spacing: 2px;
+  margin: 0;
+  text-shadow: 0 0 20px rgba(239, 68, 68, 0.8), 0 4px 8px rgba(0, 0, 0, 0.8);
+}
+
+.death-subtext {
+  font-size: 1rem;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.respawn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 9999px;
+  padding: 8px 18px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #fca5a5;
+  letter-spacing: 0.5px;
+}
+
+.spin-slow {
+  animation: spin 3s linear infinite;
+}
+
+.btn-respawn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 28px;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 18px rgba(239, 68, 68, 0.5);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.btn-respawn:hover {
+  filter: brightness(1.15);
+  transform: translateY(-2px);
+}
+
+@keyframes deathFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes deathCardPop {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes deathPulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 15px rgba(239, 68, 68, 0.7)); }
+  50% { transform: scale(1.08); filter: drop-shadow(0 0 25px rgba(239, 68, 68, 1)); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+

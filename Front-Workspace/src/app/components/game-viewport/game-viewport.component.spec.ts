@@ -1,5 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import * as THREE from 'three';
 import { GameViewportComponent } from './game-viewport.component';
+import { DayNightSystem } from './day-night.system';
 
 describe('GameViewportComponent', () => {
   let component: GameViewportComponent;
@@ -328,4 +330,569 @@ describe('GameViewportComponent', () => {
       component.ngOnDestroy();
     }).not.toThrow();
   });
+
+  it('deve exibir o Card de Arma Equipada no DOM e atualizar ao trocar de arma', () => {
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    const weaponCard = compiled.querySelector('.hud-weapon-card');
+    expect(weaponCard).not.toBeNull();
+    expect(weaponCard?.textContent).toContain('Stud Blaster');
+
+    component.equipWeapon('scatter_shot');
+    fixture.detectChanges();
+    expect(weaponCard?.textContent).toContain('Block Scatter Shot');
+
+    component.equipWeapon('spring_mine');
+    fixture.detectChanges();
+    expect(weaponCard?.textContent).toContain('Spring Mine');
+  });
+
+  it('deve processar tecla KeyJ para disparar arma', () => {
+    fixture.detectChanges();
+    const shootSpy = vi.spyOn(component.world, 'shootCurrentWeapon');
+
+    const event = new KeyboardEvent('keydown', { code: 'KeyJ' });
+    window.dispatchEvent(event);
+
+    expect(shootSpy).toHaveBeenCalled();
+  });
+
+  it('deve adicionar e exibir números flutuantes de dano (Floating Combat Text) no DOM', () => {
+    component.addFloatingCombatText(0, 1, 0, 15, 'stud_blaster');
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const floatingNum = compiled.querySelector('.floating-combat-number');
+    expect(floatingNum).not.toBeNull();
+    expect(floatingNum?.textContent).toContain('-15');
+  });
+
+  it('deve renderizar ícones Iconify (<iconify-icon>) em múltiplos elementos do HUD', () => {
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    const iconElements = compiled.querySelectorAll('iconify-icon');
+    expect(iconElements.length).toBeGreaterThan(0);
+
+    const brandIcon = compiled.querySelector('.badge-brand iconify-icon');
+    expect(brandIcon).not.toBeNull();
+    expect(brandIcon?.getAttribute('icon')).toBe('mdi:toy-brick');
+
+    const networkIcon = compiled.querySelector('.badge-network iconify-icon');
+    expect(networkIcon).not.toBeNull();
+  });
+
+  it('deve atualizar o visual da arma na mão do personagem ao invocar equipWeapon', () => {
+    fixture.detectChanges();
+
+    expect(() => {
+      component.equipWeapon('scatter_shot');
+      component.equipWeapon('spring_mine');
+      component.equipWeapon('stud_blaster');
+    }).not.toThrow();
+  });
+
+  it('deve permitir disparar com clique do botão esquerdo do mouse (pointerdown / click)', () => {
+    fixture.detectChanges();
+    const shootSpy = vi.spyOn(component.world, 'shootCurrentWeapon');
+
+    const canvas = fixture.nativeElement.querySelector('canvas.render-canvas') as HTMLCanvasElement;
+    expect(canvas).not.toBeNull();
+
+    const pointerEvent = typeof PointerEvent !== 'undefined'
+      ? new PointerEvent('pointerdown', { button: 0 })
+      : (new MouseEvent('pointerdown', { button: 0 }) as unknown as PointerEvent);
+
+    canvas.dispatchEvent(pointerEvent);
+    expect(shootSpy).toHaveBeenCalled();
+  });
+
+  it('deve exibir a mira central (crosshair reticle) e reagir ao disparo e troca de armas', () => {
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    const crosshair = compiled.querySelector('.crosshair-container');
+    expect(crosshair).not.toBeNull();
+    expect(crosshair?.querySelector('.crosshair-dot')).not.toBeNull();
+    expect(crosshair?.querySelector('.crosshair-ring')).not.toBeNull();
+    expect(crosshair?.querySelectorAll('.crosshair-line').length).toBe(4);
+
+    // Blaster padrão
+    expect(crosshair?.getAttribute('data-weapon')).toBe('stud_blaster');
+
+    // Scatter shot -> ciano
+    component.equipWeapon('scatter_shot');
+    fixture.detectChanges();
+    expect(crosshair?.getAttribute('data-weapon')).toBe('scatter_shot');
+
+    // Mina -> vermelho
+    component.equipWeapon('spring_mine');
+    fixture.detectChanges();
+    expect(crosshair?.getAttribute('data-weapon')).toBe('spring_mine');
+
+    // Disparo ativa recoil bloom (.crosshair-firing)
+    component.isShootingRecoil.set(true);
+    fixture.detectChanges();
+    expect(crosshair?.classList.contains('crosshair-firing')).toBe(true);
+
+    component.isShootingRecoil.set(false);
+    fixture.detectChanges();
+    expect(crosshair?.classList.contains('crosshair-firing')).toBe(false);
+  });
+
+  it('deve atualizar dinamicamente a posição da mira no mouse via pointermove', () => {
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    const moveEvent = typeof PointerEvent !== 'undefined'
+      ? new PointerEvent('pointermove', { clientX: 520, clientY: 340 })
+      : (new MouseEvent('pointermove', { clientX: 520, clientY: 340 }) as unknown as PointerEvent);
+
+    window.dispatchEvent(moveEvent);
+    fixture.detectChanges();
+
+    expect(component.crosshairX()).toBeGreaterThan(0);
+    expect(component.crosshairY()).toBeGreaterThan(0);
+
+    const crosshair = compiled.querySelector('.crosshair-container') as HTMLElement;
+    expect(crosshair).not.toBeNull();
+    expect(crosshair.style.left).toContain('px');
+    expect(crosshair.style.top).toContain('px');
+  });
+
+  it('deve calcular direção 3D e rotacionar o herói na direção do mouse ao disparar', () => {
+    fixture.detectChanges();
+    const shootSpy = vi.spyOn(component.world, 'shootCurrentWeapon');
+
+    component.world.heroTransform.x = 0;
+    component.world.heroTransform.z = 0;
+    component.world.vehicleComponent.driverEntityId = null; // A pé
+
+    // Simula mira 3D à direita (+X)
+    component['aimTarget3D'].set(5, 0, 0);
+    component.handleShoot();
+
+    expect(shootSpy).toHaveBeenCalled();
+    const [calledOrigin, calledDirection] = shootSpy.mock.calls[0];
+    expect(calledDirection?.x).toBeGreaterThan(0.9); // Apontando para +X
+    expect(component.world.heroTransform.rotationY).toBeCloseTo(Math.PI * 0.5, 1);
+  });
+
+  it('deve mover o personagem para frente na direção em que o mouse estiver apontando', () => {
+    fixture.detectChanges();
+    component.world.heroTransform.x = 0;
+    component.world.heroTransform.z = 0;
+    component.world.vehicleComponent.driverEntityId = null;
+
+    // Mouse apontando para +X
+    component['aimTarget3D'].set(10, 0, 0);
+    component.world.setInput({ forward: true });
+
+    component['updateGameLogic'](0.1, 0.1);
+
+    expect(component.world.heroTransform.rotationY).toBeCloseTo(Math.PI * 0.5, 1);
+    expect(component.world.heroTransform.x).toBeGreaterThan(0);
+  });
+
+  it('deve permitir mirar e disparar para o céu com elevação positiva (direction.y > 0) e inclinar o braço do herói', () => {
+    fixture.detectChanges();
+    const shootSpy = vi.spyOn(component.world, 'shootCurrentWeapon');
+
+    component.world.heroTransform.x = 0;
+    component.world.heroTransform.y = 0;
+    component.world.heroTransform.z = 0;
+    component.world.vehicleComponent.driverEntityId = null; // A pé
+
+    // Simula mira 3D apontando alto para o céu (+Y e à frente +Z)
+    component['aimTarget3D'].set(0, 25, 10);
+    component.handleShoot();
+
+    expect(shootSpy).toHaveBeenCalled();
+    const [calledOrigin, calledDirection] = shootSpy.mock.calls[0];
+    expect(calledDirection?.y).toBeGreaterThan(0.7); // Subindo fortemente em direção ao céu aberto
+    expect(component['heroRightArmPivot']).toBeDefined();
+  });
+
+  it('deve posicionar a câmera nas costas do veículo imediatamente ao entrar no carro', () => {
+    fixture.detectChanges();
+    component['wasDriving'] = false;
+    component.world.vehicleTransform.rotationY = 1.2; // Carro apontando em 1.2 rad
+    component.world.vehicleComponent.driverEntityId = component.world.heroId; // Entra no carro
+
+    component['updateGameLogic'](0.016, 0.1);
+
+    const expectedBehindTheta = component.world.vehicleTransform.rotationY + Math.PI;
+    expect(component['targetTheta']).toBeCloseTo(expectedBehindTheta, 2);
+    expect(component['currentTheta']).toBeCloseTo(expectedBehindTheta, 2);
+    expect(component['targetRadius']).toBe(11.5);
+    expect(component['wasDriving']).toBe(true);
+  });
+
+  it('deve acompanhar a rotação da lataria do veículo durante curvas mantendo o foco nas costas', () => {
+    fixture.detectChanges();
+    // Inicia dentro do veículo
+    component['wasDriving'] = true;
+    component.world.vehicleComponent.driverEntityId = component.world.heroId;
+    component.world.vehicleTransform.rotationY = 0;
+    component['lastVehicleRotationY'] = 0;
+    component['targetTheta'] = Math.PI;
+    component['currentTheta'] = Math.PI;
+
+    // Carro vira 45 graus para a direita (+0.785 rad)
+    component.world.vehicleTransform.rotationY = Math.PI / 4;
+    component['updateGameLogic'](0.016, 0.2);
+
+    expect(component['targetTheta']).toBeCloseTo(Math.PI + Math.PI / 4, 2);
+    expect(component['lastVehicleRotationY']).toBeCloseTo(Math.PI / 4, 2);
+  });
+
+  it('deve permitir girar a câmera livremente com o mouse ao pilotar o veículo', () => {
+    fixture.detectChanges();
+    component['wasDriving'] = true;
+    component.world.vehicleComponent.driverEntityId = component.world.heroId;
+
+    const initialTheta = component['targetTheta'];
+    const initialPhi = component['targetPhi'];
+
+    // Simula evento do mouse girando para a esquerda e para cima
+    component['previousPointerX'] = 200;
+    component['previousPointerY'] = 200;
+
+    const moveEvent = typeof PointerEvent !== 'undefined'
+      ? new PointerEvent('pointermove', { clientX: 250, clientY: 170 })
+      : (new MouseEvent('pointermove', { clientX: 250, clientY: 170 }) as unknown as PointerEvent);
+
+    window.dispatchEvent(moveEvent);
+
+    expect(component['targetTheta']).not.toBe(initialTheta);
+    expect(component['targetPhi']).not.toBe(initialPhi);
+  });
+
+  it('deve manter a câmera calibrada nas costas do personagem com raio 8.0 e elevação 1.45 na visão a pé', () => {
+    fixture.detectChanges();
+    component['wasDriving'] = false;
+    component.world.vehicleComponent.driverEntityId = null; // A pé
+
+    component['updateGameLogic'](0.016, 0.1);
+
+    expect(component['targetRadius']).toBe(8.0);
+    expect(component['lookAtY']).toBeCloseTo(1.45, 1);
+  });
+
+  it('não deve travar nem oscilar a rotação em 180 graus ao andar para frente com W mesmo com mira próxima no chão', () => {
+    fixture.detectChanges();
+    component['wasDriving'] = false;
+    component.world.vehicleComponent.driverEntityId = null;
+
+    component['aimTarget3D'].set(0, 0, 2.0);
+    component.world.heroTransform.x = 0;
+    component.world.heroTransform.z = 0;
+    component.world.setInput({ forward: true });
+
+    // Simula 25 frames contínuos de caminhada para frente
+    for (let i = 0; i < 25; i++) {
+      component['updateGameLogic'](0.016, i * 0.016);
+    }
+
+    // Deve progredir em +Z de forma fluida sem inverter a rotação
+    expect(component.world.heroTransform.z).toBeGreaterThan(0.5);
+    expect(component.world.heroTransform.rotationY).toBeCloseTo(0, 1);
+  });
+
+  describe('Fase 7: Modos de Jogo, Lobby, Ondas e Upgrades Roguelite', () => {
+    it('deve exibir o seletor de modo de jogo no DOM quando o estado for waiting', () => {
+      component.matchState.set('waiting');
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const lobbyModal = compiled.querySelector('.match-lobby-backdrop');
+      expect(lobbyModal).not.toBeNull();
+      expect(lobbyModal?.textContent).toContain('MODOS DE JOGO OVERDRIVE');
+      expect(lobbyModal?.textContent).toContain('Sobrevivência Co-op');
+      expect(lobbyModal?.textContent).toContain('PvP Deathmatch');
+    });
+
+    it('deve alternar o modo de jogo ao chamar selectGameMode', () => {
+      component.selectGameMode('pvp_deathmatch');
+      expect(component.gameMode()).toBe('pvp_deathmatch');
+      expect(component.world.matchState.mode).toBe('pvp_deathmatch');
+
+      component.selectGameMode('coop_survival');
+      expect(component.gameMode()).toBe('coop_survival');
+      expect(component.world.matchState.mode).toBe('coop_survival');
+    });
+
+    it('deve alternar estado de pronto e iniciar a contagem regressiva ao clicar no botão pronto', () => {
+      component.matchState.set('waiting');
+      component.isPlayerReady.set(false);
+      fixture.detectChanges();
+
+      component.toggleReady();
+      expect(component.isPlayerReady()).toBe(true);
+      expect(component.matchState()).toBe('countdown');
+    });
+
+    it('deve exibir o overlay de contagem regressiva (countdown) no DOM', () => {
+      component.matchState.set('countdown');
+      component.countdownSeconds.set(3);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const overlay = compiled.querySelector('.match-countdown-overlay');
+      expect(overlay).not.toBeNull();
+      expect(overlay?.textContent).toContain('3');
+      expect(overlay?.textContent).toContain('PREPARE-SE');
+    });
+
+    it('deve exibir o badge de onda e contador de inimigos em modo Sobrevivência Co-op in_progress', () => {
+      component.matchState.set('in_progress');
+      component.gameMode.set('coop_survival');
+      component.currentWave.set(2);
+      component.maxWaves.set(5);
+      component.enemiesRemaining.set(4);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const waveTag = compiled.querySelector('.wave-tag');
+      const enemiesTag = compiled.querySelector('.enemies-tag');
+
+      expect(waveTag).not.toBeNull();
+      expect(waveTag?.textContent).toContain('ONDA 2 / 5');
+      expect(enemiesTag).not.toBeNull();
+      expect(enemiesTag?.textContent).toContain('INIMIGOS: 4');
+    });
+
+    it('deve exibir o placar PvP em tempo real quando o modo for pvp_deathmatch', () => {
+      component.gameMode.set('pvp_deathmatch');
+      component.matchState.set('in_progress');
+      component.playerScores.set([
+        { playerId: 'local_player', name: 'Hero Local', kills: 4, deaths: 1, score: 600 },
+        { playerId: 'bot_1', name: 'Bot Brick', kills: 2, deaths: 3, score: 250 },
+      ]);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const scoreboard = compiled.querySelector('.pvp-scoreboard-card');
+      expect(scoreboard).not.toBeNull();
+      expect(scoreboard?.textContent).toContain('PLACAR DEATHMATCH');
+      expect(scoreboard?.textContent).toContain('Hero Local');
+      expect(scoreboard?.textContent).toContain('600 pts');
+    });
+
+    it('deve exibir o modal de upgrades roguelite durante wave_intermission e permitir seleção de bônus', () => {
+      component.matchState.set('wave_intermission');
+      component.currentWave.set(1);
+      component.intermissionSeconds.set(8);
+      component.upgradeOptions.set([
+        {
+          id: 'upg_damage_1',
+          title: 'Pinos de Titânio',
+          description: '+25% de dano em todas as armas LEGO.',
+          stat: 'damage',
+          multiplier: 1.25,
+          icon: 'mdi:sword-cross',
+        },
+        {
+          id: 'upg_speed_1',
+          title: 'Turbinas Overdrive',
+          description: '+20% de velocidade de corrida e drift.',
+          stat: 'move_speed',
+          multiplier: 1.2,
+          icon: 'mdi:lightning-bolt',
+        },
+      ]);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const upgradeModal = compiled.querySelector('.upgrade-modal-backdrop');
+      expect(upgradeModal).not.toBeNull();
+      expect(upgradeModal?.textContent).toContain('ESCOLHA SEU UPGRADE ROGUELITE');
+      expect(upgradeModal?.textContent).toContain('Pinos de Titânio');
+      expect(upgradeModal?.textContent).toContain('Turbinas Overdrive');
+
+      // Seleciona um upgrade
+      component.chooseUpgrade('upg_damage_1');
+      expect(component.currentWave()).toBe(2);
+      expect(component.matchState()).toBe('in_progress');
+    });
+
+    it('deve exibir a tela de vitória quando matchState for victory e reiniciar a partida ao clicar em jogar novamente', () => {
+      component.matchState.set('victory');
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const victoryCard = compiled.querySelector('.match-result-card.result-victory');
+      expect(victoryCard).not.toBeNull();
+      expect(victoryCard?.textContent).toContain('VITÓRIA ÉPICA!');
+
+      component.restartMatch();
+      expect(component.matchState()).toBe('waiting');
+      expect(component.isPlayerReady()).toBe(false);
+    });
+
+    it('deve sincronizar e criar malhas dos inimigos ativos na cena Three.js', () => {
+      fixture.detectChanges();
+      component['scene'] = new THREE.Scene();
+      component.world.matchState.enemies = [
+        {
+          id: 'enemy_scout_spec',
+          type: 'scout_block',
+          x: 2,
+          y: 0.35,
+          z: 3,
+          rotationY: 0,
+          speed: 4,
+          health: 30,
+          maxHealth: 30,
+          damage: 10,
+          active: true,
+        },
+      ];
+
+      // Simula frame de sincronização
+      component['syncEnemyVisuals'](0.016, 0.1);
+
+      expect(component['enemyVisuals'].has('enemy_scout_spec')).toBe(true);
+      const enemyVisual = component['enemyVisuals'].get('enemy_scout_spec');
+      expect(enemyVisual?.mesh).toBeDefined();
+    });
+  });
+
+  describe('Expansão: Lobby Inicial, Cenários 100x100, Ciclo Dia/Noite e Overhead HP', () => {
+    it('deve exibir o modal inicial de entrada na arena quando hasJoinedArena for false', () => {
+      component.hasJoinedArena.set(false);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const entryModal = compiled.querySelector('.arena-entrance-backdrop');
+      expect(entryModal).not.toBeNull();
+      expect(entryModal?.textContent).toContain('ENTRE NA ARENA DE BLOCOS');
+      expect(compiled.querySelector('.btn-enter-arena')).not.toBeNull();
+    });
+
+    it('deve validar o nome do piloto recusando nomes com menos de 2 ou mais de 16 caracteres', () => {
+      component.hasJoinedArena.set(false);
+
+      // Nome com menos de 2 caracteres
+      component.pilotNameInput.set('A');
+      component.enterArena();
+      expect(component.nameValidationError()).toContain('entre 2 e 16 caracteres');
+      expect(component.hasJoinedArena()).toBe(false);
+
+      // Nome com mais de 16 caracteres
+      component.pilotNameInput.set('PilotoMuitoLongoComMaisDe16Caracteres');
+      component.enterArena();
+      expect(component.nameValidationError()).toContain('entre 2 e 16 caracteres');
+      expect(component.hasJoinedArena()).toBe(false);
+    });
+
+    it('deve permitir a entrada na arena com nome válido, chamando networkService.connect() e networkService.joinGame()', () => {
+      component.hasJoinedArena.set(false);
+      const connectSpy = vi.spyOn(component.networkService, 'connect');
+      const joinSpy = vi.spyOn(component.networkService, 'joinGame');
+
+      component.pilotNameInput.set('PilotoMestre');
+      component.enterArena();
+
+      expect(component.nameValidationError()).toBeNull();
+      expect(component.hasJoinedArena()).toBe(true);
+      expect(component.localPilotName()).toBe('PilotoMestre');
+      expect(connectSpy).toHaveBeenCalled();
+      expect(joinSpy).toHaveBeenCalledWith('PilotoMestre', 'hobo_lego');
+
+      fixture.detectChanges();
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.querySelector('.arena-entrance-backdrop')).toBeNull();
+    });
+
+    it('deve alternar cenários 100x100 dinamicamente entre Outpost Industrial e Neon Cyber Arena', () => {
+      component['scene'] = new THREE.Scene();
+
+      // Cenário de Sobrevivência Co-op
+      component.setScenario('coop_survival');
+      expect(component['currentScenario']).not.toBeNull();
+      expect(component['currentScenario']?.theme).toBe('industrial_outpost');
+      expect(component['scene'].children).toContain(component['currentScenario']!.group);
+
+      const previousGroup = component['currentScenario']!.group;
+
+      // Cenário de PvP Deathmatch
+      component.setScenario('pvp_deathmatch');
+      expect(component['currentScenario']?.theme).toBe('neon_cyber');
+      expect(component['scene'].children).not.toContain(previousGroup);
+      expect(component['scene'].children).toContain(component['currentScenario']!.group);
+    });
+
+    it('deve atualizar o ciclo Dia e Noite e acionar iluminação noturna na fase da noite', () => {
+      const scene = new THREE.Scene();
+      const sun = new THREE.DirectionalLight();
+      const amb = new THREE.AmbientLight();
+      const hemi = new THREE.HemisphereLight();
+      const dayNight = new DayNightSystem(scene, sun, amb, hemi, 90);
+
+      const spotLeft = new THREE.SpotLight();
+      const spotRight = new THREE.SpotLight();
+      dayNight.vehicleHeadlights = [spotLeft, spotRight];
+
+      // Meio do dia com sol a pino (t = 22.5s de 90s, zênite / elevação = 1.0)
+      const dayState = dayNight.update(22.5);
+      expect(dayState.phase).toBe('day');
+      expect(dayState.isNight).toBe(false);
+      expect(spotLeft.visible).toBe(false);
+
+      // Avança para a meia-noite profunda (t = 22.5 + 45 = 67.5s de 90s, nadir / elevação = -1.0)
+      const nightState = dayNight.update(45);
+      expect(nightState.isNight).toBe(true);
+      expect(nightState.phase).toBe('night');
+      expect(spotLeft.visible).toBe(true);
+      expect(spotRight.visible).toBe(true);
+    });
+
+    it('deve calcular cores dinâmicas da barra de HP e atualizar as tags overhead de jogadores', () => {
+      component['camera'] = new THREE.PerspectiveCamera(65, 800 / 600, 0.1, 1000);
+      component['camera'].position.set(0, 5, 10);
+      component['camera'].lookAt(0, 0, 0);
+
+      component.world.heroTransform.x = 0;
+      component.world.heroTransform.y = 0;
+      component.world.heroTransform.z = 0;
+
+      // 80% HP -> Verde
+      component.world.heroHealth = 80;
+      component.world.heroMaxHealth = 100;
+      component.updateOverheadTags();
+      let tags = component.overheadTags();
+      expect(tags.length).toBeGreaterThan(0);
+      expect(tags[0].healthPercent).toBe(80);
+      expect(tags[0].color).toBe('#10b981');
+
+      // 40% HP -> Amarelo
+      component.world.heroHealth = 40;
+      component.updateOverheadTags();
+      tags = component.overheadTags();
+      expect(tags[0].healthPercent).toBe(40);
+      expect(tags[0].color).toBe('#f59e0b');
+
+      // 15% HP -> Vermelho
+      component.world.heroHealth = 15;
+      component.updateOverheadTags();
+      tags = component.overheadTags();
+      expect(tags[0].healthPercent).toBe(15);
+      expect(tags[0].color).toBe('#ef4444');
+    });
+
+    it('deve exibir o medidor de vida no HUD principal com a porcentagem e valores corretos', () => {
+      component.pilotHealth.set(75);
+      component.pilotMaxHealth.set(100);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const hpCard = compiled.querySelector('.pilot-hp-card');
+      expect(hpCard).not.toBeNull();
+      expect(hpCard?.textContent).toContain('75 / 100 HP');
+    });
+  });
 });
+
+

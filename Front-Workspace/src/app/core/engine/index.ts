@@ -1,4 +1,5 @@
 export * from './types';
+export * from './interfaces/combat.interface';
 export * from './game-loop';
 export * from './movement.system';
 export * from './vehicle.system';
@@ -6,4 +7,8 @@ export * from './interaction.system';
 export * from './object-pool';
 export * from './modular-block.types';
 export * from './modular-block.system';
+export * from './spatial-hash-grid';
+export * from './combat.system';
 export * from './game-world';
+export * from './match.catalog';
+export * from './match.system';

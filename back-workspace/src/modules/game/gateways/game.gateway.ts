@@ -10,16 +10,28 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { ChangeModeDto } from '../dto/change-mode.dto.js';
 import { JoinGameDto } from '../dto/join-game.dto.js';
 import { PlayerInputDto } from '../dto/player-input.dto.js';
+import { PlayerShootDto } from '../dto/player-shoot.dto.js';
+import { ReadyMatchDto } from '../dto/ready-match.dto.js';
+import { SelectUpgradeDto } from '../dto/select-upgrade.dto.js';
 import { GameRoomService } from '../services/game-room.service.js';
 import type {
   JoinGameResponse,
+  MatchStateSnapshot,
   PingPayload,
   PongResponse,
+  ShootResult,
 } from '../interfaces/index.js';
 
-export type { JoinGameResponse, PingPayload, PongResponse };
+export type {
+  JoinGameResponse,
+  MatchStateSnapshot,
+  PingPayload,
+  PongResponse,
+  ShootResult,
+};
 
 @WebSocketGateway({
   cors: {
@@ -37,6 +49,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   constructor(private readonly gameRoomService: GameRoomService) {}
 
   afterInit(server: Server): void {
+    this.server = server;
     this.logger.log('GameGateway initialized with WebSocketServer');
     this.gameRoomService.setServer(server);
   }
@@ -56,9 +69,14 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     @MessageBody() payload?: JoinGameDto,
   ): Promise<JoinGameResponse> {
     await client.join('game-room');
-    const player = this.gameRoomService.addPlayer(client.id, payload?.playerName);
+    const requestedName = payload?.playerName ?? payload?.name;
+    const player = this.gameRoomService.addPlayer(
+      client.id,
+      requestedName,
+      payload?.characterType,
+    );
 
-    this.logger.log(`Player registered: ${player.name} (${client.id})`);
+    this.logger.log(`Player registered: ${player.name} (${client.id}) [${player.characterType}]`);
     return {
       status: 'ok',
       playerId: client.id,
@@ -75,6 +93,14 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     this.gameRoomService.enqueueInput(client.id, input);
   }
 
+  @SubscribeMessage('playerShoot')
+  handlePlayerShoot(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: PlayerShootDto,
+  ): ShootResult {
+    return this.gameRoomService.handlePlayerShoot(client.id, payload);
+  }
+
   @SubscribeMessage('ping')
   handlePing(
     @ConnectedSocket() client: Socket,
@@ -89,5 +115,61 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
     client.emit('pong', pongResponse);
     return pongResponse;
+  }
+
+  @SubscribeMessage('changeMode')
+  @SubscribeMessage('setGameMode')
+  handleChangeMode(
+    @ConnectedSocket() _client: Socket,
+    @MessageBody() dto: ChangeModeDto,
+  ): { success: boolean; mode: string } {
+    const matchManager = this.gameRoomService.getMatchManagerService();
+    const success = matchManager.setMode(dto.mode);
+    if (success && this.server) {
+      this.server.to('game-room').emit('matchSnapshot', matchManager.getSnapshot());
+    }
+    return { success, mode: matchManager.getMode() };
+  }
+
+  @SubscribeMessage('readyMatch')
+  @SubscribeMessage('playerReady')
+  handleReadyMatch(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() dto: ReadyMatchDto,
+  ): { success: boolean; state: string } {
+    const matchManager = this.gameRoomService.getMatchManagerService();
+    const success = matchManager.setPlayerReady(client.id, dto.ready);
+    if (this.server) {
+      this.server.to('game-room').emit('matchSnapshot', matchManager.getSnapshot());
+    }
+    return { success, state: matchManager.getState() };
+  }
+
+  @SubscribeMessage('selectUpgrade')
+  handleSelectUpgrade(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() dto: SelectUpgradeDto,
+  ): { success: boolean } {
+    const player = this.gameRoomService.getPlayer(client.id);
+    if (!player) {
+      return { success: false };
+    }
+    const matchManager = this.gameRoomService.getMatchManagerService();
+    const success = matchManager.selectUpgrade(client.id, dto.upgradeId, player);
+    if (success && this.server) {
+      this.server.to('game-room').emit('matchSnapshot', matchManager.getSnapshot());
+    }
+    return { success };
+  }
+
+  @SubscribeMessage('restartMatch')
+  handleRestartMatch(
+    @ConnectedSocket() _client: Socket,
+  ): { success: boolean; state: string } {
+    const snapshot = this.gameRoomService.restartMatch();
+    return {
+      success: true,
+      state: snapshot.match?.state ?? 'waiting',
+    };
   }
 }
