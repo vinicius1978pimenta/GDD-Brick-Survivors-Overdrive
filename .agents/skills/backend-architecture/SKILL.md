@@ -23,10 +23,12 @@ src/
 │       ├── controllers/       # Camada de entrada (HTTP, REST, validação de payload)
 │       ├── services/          # Regras de negócio e casos de uso (orquestração)
 │       ├── dto/               # Objetos de transferência de dados (entrada e saída)
+│       ├── interfaces/        # Interfaces e contratos de dados tipados isolados
 │       ├── entities/          # Modelos de domínio ou entidades de persistência
 │       ├── repositories/      # Interfaces e implementações de persistência
 │       └── [feature].module.ts # Declaração e encapsulamento do módulo
 ├── common/                    # Utilitários compartilhados, decorators, filtros, guards
+│   └── interfaces/            # Interfaces globais/compartilhadas entre módulos
 ├── config/                    # Configurações de ambiente tipadas
 └── main.ts                    # Bootstrap da aplicação
 ```
@@ -51,6 +53,10 @@ src/
 4. **Repositories**:
    - Isolam o acesso ao banco de dados ou persistência.
    - Permitem que o Service dependa de uma interface de repositório, facilitando a criação de mocks em testes unitários.
+
+5. **Interfaces (`interfaces/`)**:
+   - Toda e qualquer interface ou contrato de dados tipados deve residir obrigatoriamente em pasta dedicada `interfaces/` (seja por módulo em `src/modules/[feature]/interfaces/` ou em `src/common/interfaces/`).
+   - **Regra Estrita**: Nunca declare interfaces soltas dentro de arquivos de services, controllers ou gateways, mantendo a responsabilidade única de cada arquivo e a máxima legibilidade do código.
 
 ---
 

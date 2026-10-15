@@ -31,4 +31,5 @@ As seguintes skills estão configuradas e prontas para uso em `.agents/skills/`:
    - `npm test`
    - `npm run build`
 5. **Padrão de Migrations (TypeORM)**: Toda migration deve obrigatoriamente utilizar timestamp em milissegundos (`Date.now()`, 13 dígitos) como prefixo do arquivo (`<timestamp>-<Nome>.ts`) e no nome da classe (`class <Nome><timestamp>`), garantindo compatibilidade nativa com a coluna `timestamp bigint` do TypeORM e ordem estrita de execução.
+6. **Separação Estrita de Interfaces (`interfaces/` ou `types/`)**: Toda interface, contrato de dados, modelo tipado ou payload de rede deve residir obrigatoriamente em pasta separada e dedicada (`interfaces/` ou `types/`). Nunca declare interfaces soltas ou inline dentro de arquivos de componentes, services, controllers, gateways ou sistemas ECS, garantindo código desacoplado, modular e com máxima legibilidade.
 

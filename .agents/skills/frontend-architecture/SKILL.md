@@ -47,9 +47,14 @@ src/
   - Repassam dados tratados para os componentes de apresentação.
 
 ### 2.2 Gerenciamento de Estado
-1. **Estado Local**: Use o estado nativo (`useState`, `useReducer`) apenas para controle de interface local (abrir/fechar modal, tabs, digitação em inputs).
+1. **Estado Local**: Use o estado nativo (`useState`, `useReducer`, `signal`) apenas para controle de interface local (abrir/fechar modal, tabs, digitação em inputs).
 2. **Estado do Servidor**: Use bibliotecas especializadas (como TanStack Query ou SWR) para cache, sincronização e revalidação de dados remotos. Não replique dados de API em estados globais desnecessariamente.
-3. **Estado Global**: Para preferências do usuário (tema, idioma, sessão autenticada), utilize gerenciadores enxutos (Zustand ou React Context com escopo delimitado).
+3. **Estado Global**: Para preferências do usuário (tema, idioma, sessão autenticada), utilize gerenciadores enxutos (Zustand, Signals ou Context com escopo delimitado).
+
+### 2.3 Separação Estrita de Interfaces e Tipos (`interfaces/` ou `types/`)
+- **Regra Obrigatória**: Toda interface de componente, contratos de dados, payloads de rede, assinaturas de eventos e tipos de entidades/sistemas devem residir obrigatoriamente em pastas dedicadas (`interfaces/` ou `types/`).
+- **Arquivos de Implementação Limpos**: Arquivos `.component.ts`, `.service.ts` ou `.system.ts` devem conter exclusivamente a implementação da sua classe, sistema ou função. As interfaces correspondentes devem ser extraídas e importadas explicitamente de seus respectivos arquivos (ex: `interfaces/game-viewport.interface.ts`, `types/vehicle.types.ts`).
+- **Legibilidade e Reuso**: Essa separação evita arquivos inflados com dezenas de linhas de tipagem, desacopla as definições de dados de seus consumidores e facilita a leitura e manutenção imediata do código.
 
 ---
 
