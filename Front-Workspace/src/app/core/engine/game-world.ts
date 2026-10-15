@@ -459,7 +459,10 @@ export class GameWorld {
   /**
    * Enfileira um input enviado ao servidor com a posição prevista localmente.
    */
-  public enqueuePendingInput(seq: number, input: InputState, dt: number): void {
+  public enqueuePendingInput(seq: number, input: InputState, dt: number, rotationY?: number): void {
+    const heroOrVehicleRot =
+      rotationY ?? (this.isDriving() ? this.vehicleTransform.rotationY : this.heroTransform.rotationY);
+
     this.pendingInputs.push({
       seq,
       input: {
@@ -470,6 +473,7 @@ export class GameWorld {
         handbrake: input.handbrake,
         jump: Boolean(input.jump),
         interact: input.interact,
+        rotationY: heroOrVehicleRot,
       },
       dt,
       predictedPosition: {
@@ -487,12 +491,12 @@ export class GameWorld {
 
   /**
    * Executa a reconciliação autoritativa baseada no snapshot do servidor.
-   * Se a divergência exceder o limiar (ex: 0.25m), ajusta e reaplica os inputs pendentes.
+   * Se a divergência exceder o limiar (ex: 0.65m), ajusta e reaplica os inputs pendentes.
    */
   public reconcileServerSnapshot(
     snapshot: WorldStateSnapshot,
     localPlayerId: string,
-    divergenceThreshold = 0.25,
+    divergenceThreshold = 0.65,
   ): { reconciled: boolean; divergence: number } {
     const serverPlayer = snapshot.players.find((p) => p.id === localPlayerId);
     if (!serverPlayer) {
@@ -521,14 +525,20 @@ export class GameWorld {
     const divergence = Math.hypot(dx, dz);
 
     if (divergence > divergenceThreshold) {
-      // Ajusta posição e orientação para o estado autoritativo
+      // Ajusta posição para o estado autoritativo
       this.heroTransform.x = serverPlayer.x;
       this.heroTransform.y = serverPlayer.y;
       this.heroTransform.z = serverPlayer.z;
-      this.heroTransform.rotationY = serverPlayer.rotationY;
+      // Se estiver pilotando, o servidor dita a rotação do veículo. Se a pé, preserva a orientação de mira
+      if (this.isDriving()) {
+        this.heroTransform.rotationY = serverPlayer.rotationY;
+      }
 
       // Replay dos inputs locais pendentes (re-simulação determinística)
       for (const pending of this.pendingInputs) {
+        if (pending.input.rotationY !== undefined && !this.isDriving()) {
+          this.heroTransform.rotationY = pending.input.rotationY;
+        }
         updateMovementSystem(
           this.heroTransform,
           this.heroVelocity,

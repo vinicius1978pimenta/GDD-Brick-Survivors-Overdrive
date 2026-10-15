@@ -214,6 +214,8 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
     this.attachEventListeners();
     this.startGameLoop();
 
+    this.networkService.connect();
+
     this.unsubscribeSnapshots = this.networkService.onSnapshot((snapshot) => {
       this.handleServerSnapshot(snapshot);
     });
@@ -2053,22 +2055,7 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
    * Atualiza lógica da simulação ECS, posições dos meshes 3D e câmera adaptativa.
    */
   private updateGameLogic(delta: number, time: number): void {
-    // Envia o input local e enfileira no buffer de predição do cliente
-    if (this.networkService.isConnected()) {
-      const seq = this.networkService.sendInput({
-        forward: this.world.inputState.forward,
-        backward: this.world.inputState.backward,
-        left: this.world.inputState.left,
-        right: this.world.inputState.right,
-        handbrake: this.world.inputState.handbrake,
-        jump: Boolean(this.world.inputState.jump),
-        interact: this.world.inputState.interact,
-        dt: delta,
-      });
-      this.world.enqueuePendingInput(seq, this.world.inputState, delta);
-    }
-
-    // Se a pé, orienta a direção do herói para onde o mouse aponta na arena (twin-stick / strafe)
+    // Se a pé, orienta a direção do herói para onde o mouse aponta na arena (twin-stick / strafe) ANTES de enviar o input
     if (!this.world.isDriving()) {
       if (this.camera) {
         this.updateAimTarget();
@@ -2079,6 +2066,26 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
           this.world.heroTransform.rotationY = Math.atan2(dx, dz);
         }
       }
+    }
+
+    const currentRotationY = this.world.isDriving()
+      ? this.world.vehicleTransform.rotationY
+      : this.world.heroTransform.rotationY;
+
+    // Envia o input local e enfileira no buffer de predição do cliente com rotação atual sincronizada
+    if (this.networkService.isConnected()) {
+      const seq = this.networkService.sendInput({
+        forward: this.world.inputState.forward,
+        backward: this.world.inputState.backward,
+        left: this.world.inputState.left,
+        right: this.world.inputState.right,
+        handbrake: this.world.inputState.handbrake,
+        jump: Boolean(this.world.inputState.jump),
+        interact: this.world.inputState.interact,
+        rotationY: currentRotationY,
+        dt: delta,
+      });
+      this.world.enqueuePendingInput(seq, this.world.inputState, delta, currentRotationY);
     }
 
     // 1. Avança a simulação determinística do GameWorld
@@ -2335,7 +2342,11 @@ export class GameViewportComponent implements OnInit, AfterViewInit, OnDestroy {
 
         // Sinais de Partida e Inimigos da Fase 7
         if (this.matchState() !== match.state) this.matchState.set(match.state);
-        if (this.gameMode() !== match.mode) this.gameMode.set(match.mode);
+        if (this.gameMode() !== match.mode) {
+          this.gameMode.set(match.mode);
+          this.world.setGameMode(match.mode);
+          this.setScenario(match.mode);
+        }
         if (this.currentWave() !== match.currentWave) this.currentWave.set(match.currentWave);
         if (this.enemiesRemaining() !== match.enemiesRemaining) {
           this.enemiesRemaining.set(match.enemiesRemaining);

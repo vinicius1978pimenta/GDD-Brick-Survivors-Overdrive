@@ -22,6 +22,8 @@ export class NetworkService {
   private snapshotListeners: SnapshotCallback[] = [];
   private matchListeners: MatchSnapshotCallback[] = [];
 
+  private pendingPlayerName: string | null = null;
+
   // Sinais reativos públicos para o HUD e a simulação
   public readonly isConnected = signal(false);
   public readonly pingMs = signal(0);
@@ -58,6 +60,7 @@ export class NetworkService {
    */
   public disconnect(): void {
     this.stopHeartbeatPing();
+    this.pendingPlayerName = null;
 
     if (this.socket) {
       this.socket.disconnect();
@@ -71,10 +74,44 @@ export class NetworkService {
 
   /**
    * Entra na sala de jogo autoritativa no servidor.
+   * Aguarda a conexão caso ainda esteja em handshake e reconecta automaticamente.
    */
   public async joinGame(playerName?: string): Promise<JoinGameResponse | null> {
-    if (!this.socket || !this.isConnected()) {
+    if (playerName) {
+      this.pendingPlayerName = playerName;
+    }
+
+    if (!isPlatformBrowser(this.platformId)) {
       return null;
+    }
+
+    if (!this.socket) {
+      this.connect();
+    }
+
+    const nameToJoin = this.pendingPlayerName ?? playerName;
+
+    // Se o socket ainda está conectando, aguarda o evento 'connect' antes de emitir
+    if (!this.isConnected()) {
+      return new Promise((resolve) => {
+        const onConnected = () => {
+          this.emitJoinGame(nameToJoin).then(resolve);
+        };
+
+        if (this.socket) {
+          this.socket.once('connect', onConnected);
+        } else {
+          resolve(null);
+        }
+      });
+    }
+
+    return this.emitJoinGame(nameToJoin);
+  }
+
+  private emitJoinGame(playerName?: string): Promise<JoinGameResponse | null> {
+    if (!this.socket) {
+      return Promise.resolve(null);
     }
 
     return new Promise((resolve) => {
@@ -101,6 +138,7 @@ export class NetworkService {
     handbrake: boolean;
     jump?: boolean;
     interact: boolean;
+    rotationY?: number;
     dt: number;
   }): number {
     this.sequenceNumber++;
@@ -113,6 +151,7 @@ export class NetworkService {
       handbrake: input.handbrake,
       jump: Boolean(input.jump),
       interact: input.interact,
+      rotationY: input.rotationY,
       dt: input.dt,
       timestamp: Date.now(),
     };
@@ -148,6 +187,7 @@ export class NetworkService {
    */
   public setGameMode(mode: GameModeType): void {
     if (this.socket && this.isConnected()) {
+      this.socket.emit('changeMode', { mode });
       this.socket.emit('setGameMode', { mode });
     }
   }
@@ -158,6 +198,7 @@ export class NetworkService {
   public setPlayerReady(ready: boolean): void {
     this.isPlayerReady.set(ready);
     if (this.socket && this.isConnected()) {
+      this.socket.emit('readyMatch', { ready });
       this.socket.emit('playerReady', { ready });
     }
   }
@@ -237,6 +278,9 @@ export class NetworkService {
       this.isConnected.set(true);
       if (this.socket?.id) {
         this.localPlayerId.set(this.socket.id);
+      }
+      if (this.pendingPlayerName) {
+        this.emitJoinGame(this.pendingPlayerName);
       }
     });
 

@@ -70,6 +70,7 @@ export interface PlayerInputPayload {
   readonly handbrake: boolean;
   readonly jump: boolean;
   readonly interact: boolean;
+  readonly rotationY?: number;
   readonly dt: number;
   readonly timestamp: number;
 }
@@ -91,6 +92,7 @@ export interface PendingInput {
     readonly handbrake: boolean;
     readonly jump?: boolean;
     readonly interact: boolean;
+    readonly rotationY?: number;
   };
   readonly dt: number;
   predictedPosition: {

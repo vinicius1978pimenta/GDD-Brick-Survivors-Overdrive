@@ -7,6 +7,7 @@ describe('NetworkService (Socket.IO Real-time Netcode)', () => {
   let service: NetworkService;
   let mockSocket: {
     on: ReturnType<typeof vi.fn>;
+    once: ReturnType<typeof vi.fn>;
     emit: ReturnType<typeof vi.fn>;
     disconnect: ReturnType<typeof vi.fn>;
     id: string;
@@ -18,6 +19,10 @@ describe('NetworkService (Socket.IO Real-time Netcode)', () => {
     mockSocket = {
       id: 'socket-test-123',
       on: vi.fn((event: string, callback: (...args: unknown[]) => void) => {
+        socketCallbacks.set(event, callback);
+        return mockSocket;
+      }),
+      once: vi.fn((event: string, callback: (...args: unknown[]) => void) => {
         socketCallbacks.set(event, callback);
         return mockSocket;
       }),
@@ -203,5 +208,32 @@ describe('NetworkService (Socket.IO Real-time Netcode)', () => {
         direction: { x: 0, y: 0, z: 1 },
       }),
     );
+  });
+
+  it('deve enfileirar joinGame e emitir assim que o socket conectar assincronamente', async () => {
+    // Chama joinGame antes do connect
+    const joinPromise = service.joinGame('AssyncPilot');
+
+    expect(service.isConnected()).toBe(false);
+
+    // Dispara o evento de conexão do socket
+    socketCallbacks.get('connect')?.();
+
+    // Agora o emit de joinGame deve ter ocorrido
+    const lastEmitCall = mockSocket.emit.mock.calls.find((call) => call[0] === 'joinGame');
+    expect(lastEmitCall).toBeDefined();
+
+    const ackFunction = lastEmitCall?.[2] as (response: JoinGameResponse) => void;
+    ackFunction({
+      status: 'ok',
+      playerId: 'socket-test-123',
+      name: 'AssyncPilot',
+      tick: 77,
+    });
+
+    const result = await joinPromise;
+    expect(result).not.toBeNull();
+    expect(result?.name).toBe('AssyncPilot');
+    expect(service.serverTick()).toBe(77);
   });
 });

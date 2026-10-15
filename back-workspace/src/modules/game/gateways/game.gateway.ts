@@ -114,6 +114,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   @SubscribeMessage('changeMode')
+  @SubscribeMessage('setGameMode')
   handleChangeMode(
     @ConnectedSocket() _client: Socket,
     @MessageBody() dto: ChangeModeDto,
@@ -127,6 +128,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   @SubscribeMessage('readyMatch')
+  @SubscribeMessage('playerReady')
   handleReadyMatch(
     @ConnectedSocket() client: Socket,
     @MessageBody() dto: ReadyMatchDto,

@@ -364,12 +364,16 @@ export class GameRoomService implements OnModuleInit, OnModuleDestroy {
   }
 
   private simulatePedestrian(player: ConnectedPlayer, input: PlayerInputDto, dt: number): void {
-    let steer = 0;
-    if (input.left) steer += 1;
-    if (input.right) steer -= 1;
+    if (typeof input.rotationY === 'number') {
+      player.rotationY = input.rotationY;
+    } else {
+      let steer = 0;
+      if (input.left) steer += 1;
+      if (input.right) steer -= 1;
 
-    if (steer !== 0) {
-      player.rotationY += steer * PLAYER_CONFIG.turnSpeed * dt;
+      if (steer !== 0) {
+        player.rotationY += steer * PLAYER_CONFIG.turnSpeed * dt;
+      }
     }
 
     const forwardAxis = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);

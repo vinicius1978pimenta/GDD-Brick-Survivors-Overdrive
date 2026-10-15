@@ -125,7 +125,7 @@ export class MatchManagerService {
       this.readyPlayers.delete(playerId);
     }
 
-    if (this.readyPlayers.size > 0 && this.readyPlayers.size >= this.playerScores.size) {
+    if (this.readyPlayers.size > 0) {
       this.startCountdown();
     }
     return true;

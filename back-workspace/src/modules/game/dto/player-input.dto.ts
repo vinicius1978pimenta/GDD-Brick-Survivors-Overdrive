@@ -1,4 +1,4 @@
-import { IsBoolean, IsNumber } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional } from 'class-validator';
 
 export class PlayerInputDto {
   @IsNumber()
@@ -30,4 +30,8 @@ export class PlayerInputDto {
 
   @IsNumber()
   readonly timestamp: number;
+
+  @IsOptional()
+  @IsNumber()
+  readonly rotationY?: number;
 }
